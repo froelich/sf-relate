@@ -1,0 +1,74 @@
+num_main_parties = 2
+hub_party_id = 1
+debug = false # should be false for timing experiments
+test_sign_test = 0 # 0 means the main experiment
+
+## Crypto parameters
+# Options: PN12QP109, PN13QP218, PN14QP438, PN15QP880, PN16QP1761
+# Defined in ckks/params.go in Lattigo library
+ckks_params = "PN14QP438" # fixed
+
+# MPC parameters
+div_sqrt_max_len = 100000 # fixed
+# num channels --- maybe need to reduce if num of cores is fewer
+mpc_num_threads = 400 # communication channels. HE: should be at least PARA*((NumMainParties*3)+1), MPC: should be at least PARA
+
+mpc_field_size = 256 # fixed
+mpc_data_bits = 60 # fixed
+mpc_frac_bits = 30 # fixed
+mpc_boolean_shares = true # fixed
+use_mpc = false # if use MPC true, for HE --> false
+
+# num threads --- maybe need to reduce if num of cores is fewer
+nbr_threads = 1280 # not used in MPC, can be #CPUs or even higher for HE --> goal is to use parallelization efficiently
+
+## Relative Matching Parameters
+thresh_value= [1.8232, 1.6464, 1.2928, 0.5857] # correspond to degree 3, 2, 1, 0
+bucket_size	= 1
+comparison_map = {"1" = [2]} # fixed for 2 parties experiments
+boot_map = {"1" = 1, "1_boot" = 3, "1_dec" = 5, "2" = 2, "2_boot" = 4, "2_dec" = 6} # can be left like this for 2 parties
+
+# approx for HE only
+degree = 30
+iter = 3
+A = 0.0
+B = 50.0
+scale_down = 0.0 # for HE only, need to be increased with the data dimension (nbr of SNPs, #het)
+scale_down_discretize = [ 2.0, 2.0, 2.0, 2.0, 1.0] 
+debug_st_flag = false # if true, will save the intermediate results of the protocol
+
+Blinding = false # fixed, old feature, might be reintroduced at some point
+single = false # fixed, old feature, might be reintroduced at some point
+reveal = 0 # currently HE only;  reveal = 0 is SF-Related's default mode, reveal = 3 reveals all kinship
+
+
+# Data
+npz = true
+N = 100000
+# demo experiment that only processes the first block
+total_nbr_rows = 8192 # if <= 0 --> read from npz 
+total_nbr_rows_test = 0 # test only a subset of the rows # if <= 0 --> all rows
+number_of_columns = 0 # if <= 0 --> read from file
+# demo experiment that only processes the first 100 SNPs
+number_of_columns_test = 0 # test only a subset of the columns # if <= 0 --> all columns
+start_key = 0
+batch_length = 8192 # for large-scale experiments, should be 8192 for HE
+block_limit = 100  #5000 was a good tradeoff with HE
+
+# cache
+result_folder = "out/demo/"
+
+# test
+local_test = false # should be false 
+
+[servers.party0]
+ipaddr = "127.0.0.1" #should be local IP of GCP machine
+ports  = {party1 = "5110", party2 = "7320"}
+
+[servers.party1]
+ipaddr = "127.0.0.1"
+ports  = {party2 = "9210"}
+
+[servers.party2]
+ipaddr = "127.0.0.1"
+ports  = {}

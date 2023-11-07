@@ -1,0 +1,3 @@
+python3 step0_1_split_data.py
+python3 step0_2_recode_to_npy.py
+python3 step0_3_compute_KING.py

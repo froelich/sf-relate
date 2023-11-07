@@ -1,0 +1,6 @@
+# party 0 is run on the same machine as party 1
+separator = ' '
+
+# should update the data directory correspondingly
+row_index_file= "notebooks/data/2party_100/table/mode4cM8len80k8/tables/party1/ID_table.npz"
+column_index_file= "notebooks/data/2party_100/sketched/SNPs_70.npz"

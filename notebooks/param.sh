@@ -1,0 +1,14 @@
+n=100
+w=1
+k=8
+l=4
+L=3
+snpmin=80
+target_len=80
+samp_mode=4
+len_seg_cM=8
+rep=1
+rid=2
+LSH=Hamming
+l_array=( $l )
+tid=mode${samp_mode}cM${len_seg_cM}len${target_len}k${k}
