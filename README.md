@@ -6,14 +6,14 @@ Software for secure and federated genetic relatives detection, as described in:
 Matthew Man-Hou Hong, David Froelicher, Ricky Magner, Victoria Popic, Bonnie Berger, and Hyunghoon Cho,
 Under review, 2023
 
-This repository contains a set of scripts to generate UK-Biobank-based data sets for testing the tool.
-We are working on developing a simple demonstration of the software based on the 1000 Genomes Project for convenience.
+This repository contains a set of scripts specialized to generate the inputs from the UK-Biobank dataset for testing the tool.
+We are working on developing a simple demonstration of the software based on the (publicly available) 1000 Genomes Project for convenience.
 
 ## Installation
 
 ### Dependencies
 
-SF-Relate requires that `go`, `python3` are available in the exec path in shell. Here are the links for installation:
+SF-Relate requires that `go` and `python3` are available in the exec path in shell. Here are the links for installation:
 
 - [Go](https://go.dev/doc/install) (>=1.18.3)
 - Python (>=3.9.2) with [NumPy](https://numpy.org/install/), [joblib](https://joblib.readthedocs.io/en/stable/), [pandas](https://pandas.pydata.org/) and [bgen-reader](https://pypi.org/project/bgen-reader/).
@@ -33,7 +33,7 @@ finishes without any output, the package has been successfully configured.
 
 ## Preparation of Test Data from [UK Biobank](https://www.ukbiobank.ac.uk/) 
 The following describes how to generate example test data using UK Biobank.
-Note UK Biobank is not a public resource. We are working on new demonstrations using public resources like [1000 Genomes](https://www.internationalgenome.org/).
+Note that this requires access to the UK Biobank. We are working on new demonstrations using public resources like [1000 Genomes](https://www.internationalgenome.org/).
 
 The generated test data are split between two parties. Party `i`'s local data is stored in
 the `notebooks/data/2party_{n}/party{i}`,
@@ -68,7 +68,7 @@ To run SF-Relate on more than 2 parties, run it between every pair of parties.
 ### Step 1 --- Hashing and bucketing
 To run the bucketing step, run `python3 notebooks/step1_encode_and_bucketing.py`.
 With the default parameters, for party `i`, the list of samples in buckets are stored at `notebooks/data/2party_100/table/mode4cM8len80k8/tables/party{i + 1}/ID_table.npz` (note the party's indices are shifted).
-For real-case usages when datasets are on two machines, the directories in the scripts should be updated correspondingly.
+For real-case usages when datasets are on two machines, the directories in the scripts should be updated accordingly.
 
 #### Input Format
 In the following files, `mf` in the file names (e.g. 0.01) signifies that SNPs with minor allele frequencies (MAF) under mf are removed from UKB in the preparation.
@@ -76,7 +76,7 @@ In the following files, `mf` in the file names (e.g. 0.01) signifies that SNPs w
 By default, a generated test case is stored at `notebooks/data/2party_{n}`. All input files are under this directory.
 - `party{i}/haps/chr[1-22].npy` stores the phased haplotypes of party `i`, each being a numpy matrix of `2n` rows. 
 Haplotypes (rows) are encoded as vector of bytes, and different bytes are considered different variants by default.
-- `geno/party{i+1}/all_chrs_maf{mf}.bin` stores the genotype count matrix of size `n` by `M`, where `M` is the number of SNPs on which KING (see [Manichaikul et al.](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC3025716/)) is computed. Each count (0/1/2) are encoded as bytes in the binary file, in row major. 
+- `geno/party{i+1}/all_chrs_maf{mf}.bin` stores the genotype count matrix of size `n` by `M`, where `M` is the number of SNPs on which KING (see [Manichaikul et al.](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC3025716/)) is computed. Each count (0/1/2) is encoded as bytes in the binary file, in row major. 
 
 Additionally, the genetic map files need to be placed at
 - `notebooks/data/maps/chr[1-22].b37.gmap.gz`. One can retrieve these files from [shapeit4](https://github.com/odelaneau/shapeit4/tree/master/maps) or other public resources.
@@ -121,5 +121,6 @@ Once SF-Relate finishes, it stores its output at `out/demo/`, with the following
 - `[X,Y,Z]/test.txt` stores the log of each party's execution.
 
 ## Contact for Questions
-
+Matthew Man-Hou Hong, matthong@mit.edu
+David Froelicher, dfroelic@mit.edu
 Hoon Cho, hoon.cho@yale.edu
