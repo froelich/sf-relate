@@ -1,0 +1,11 @@
+.idea
+.ipynb_checkpoints
+.DS_Store
+qctool
+*.iml
+.vscode
+__*__
+.venv
+*backup
+out/
+go.sum
