@@ -121,6 +121,6 @@ Once SF-Relate finishes, it stores its output at `out/demo/`, with the following
 - `[X,Y,Z]/test.txt` stores the log of each party's execution.
 
 ## Contact for Questions
-Matthew Man-Hou Hong, matthong@mit.edu
-David Froelicher, dfroelic@mit.edu
+Matthew Man-Hou Hong, matthong@mit.edu; 
+David Froelicher, dfroelic@mit.edu; 
 Hoon Cho, hoon.cho@yale.edu
