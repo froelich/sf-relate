@@ -24,7 +24,7 @@ To install SF-Relate, clone the repository and try building as follows. It will 
 ```
 git clone https://github.com/froelich/sf-relate.git
 cd sf-relate
-go get github.com/froelich/sf-relate
+go get relativeMatch
 go build
 ```
 
@@ -41,6 +41,7 @@ bash 2_sketch.sh
 bash 3_run_MHE.sh
 bash 4_verify_output.sh
 ```
+Note that [extra dependencies](#extra-dependencies) may be required to process 1000 Genomes data.
 
 ## Preparation of Test Data from [1000 Genomes](https://pubmed.ncbi.nlm.nih.gov/36055201/)
 The following describes how to generate example test data based on 1000 Genomes phase 3, phased data hosted on [PLINK2](https://www.cog-genomics.org/plink/2.0/resources#phase3_1kg).
@@ -54,6 +55,7 @@ The file `notebooks/param.sh` stores the default parameters used in the generati
 ### Extra Dependencies 
 - [PLINK 2, build 2023.11.23](https://www.cog-genomics.org/plink/2.0/) is required for manipulating the 1000 Genome data.
 - [Pgenlib v0.9.1](https://pypi.org/project/Pgenlib/) is required for reading the PLINK2 `.pgen` files in Python.
+- Linux commandline tools `wget` and `unzip` (install via `sudo apt-get install wget unzip` if you have admin rights).
 
 ### Usage
 ```
