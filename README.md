@@ -16,7 +16,7 @@ We are working on developing a simple demonstration of the software based on the
 SF-Relate requires that `go` and `python3` are available in the exec path in shell. Here are the links for installation:
 
 - [Go](https://go.dev/doc/install) (>=1.18.3)
-- Python (>=3.9.2) with [NumPy](https://numpy.org/install/), [joblib](https://joblib.readthedocs.io/en/stable/), [pandas](https://pandas.pydata.org/) and [bgen-reader](https://pypi.org/project/bgen-reader/).
+- Python (>=3.9.2) with [NumPy](https://numpy.org/install/), [joblib](https://joblib.readthedocs.io/en/stable/), [pandas](https://pandas.pydata.org/).
 
 ### Install SF-Relate
 
@@ -31,6 +31,18 @@ go build
 If `go build` produces an error, run commands suggested by Go and try again. If the build
 finishes without any output, the package has been successfully configured.
 
+## Running a full test using [1000 Genomes](https://pubmed.ncbi.nlm.nih.gov/36055201/) Data
+We prepared a series of bash scripts for building and testing the pipeline using 1000 Genome samples.
+To run them, execute the following.
+```
+bash 0_prepare_1KG.sh
+bash 1_hashing.sh
+bash 2_sketch.sh
+bash 3_run_MHE.sh
+bash 4_verify_output.sh
+```
+Note that the scripts download some necessary dependencies to fetch and maniuplate 1000 Genome from PLINK2's 1000 Genome Resources, formatted in `.pgen`.
+
 ## Preparation of Test Data from [1000 Genomes](https://pubmed.ncbi.nlm.nih.gov/36055201/)
 The following describes how to generate example test data based on 1000 Genomes phase 3, phased data hosted on [PLINK2](https://www.cog-genomics.org/plink/2.0/resources#phase3_1kg).
 
@@ -42,7 +54,7 @@ The file `notebooks/param.sh` stores the default parameters used in the generati
 
 ### Extra Dependencies 
 - [PLINK 2, build 2023.11.23](https://www.cog-genomics.org/plink/2.0/) is required for manipulating the 1000 Genome data.
-- [Pgelib v0.9.1](https://pypi.org/project/Pgenlib/) is required for reading the PLINK2 `.pgen` files.
+- [Pgenlib v0.9.1](https://pypi.org/project/Pgenlib/) is required for reading the PLINK2 `.pgen` files in Python.
 
 ### Usage
 ```

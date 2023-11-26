@@ -3,6 +3,7 @@ cd data/1KG
 bash download_1KG.sh
 bash filt.sh
 cd ../..
+pip3 install pgenlib
 python3 step0_split_1KG_to_tests.py
 mkdir data/maps
 cd data/maps
