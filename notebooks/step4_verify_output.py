@@ -1,12 +1,5 @@
 from my_util import *
-from joblib import Parallel, delayed
-import multiprocessing as mp
-import os
-import pandas as pd
 from user_config import conf
-import seaborn as sns
-import matplotlib.pyplot as plt
-# sort the dataframe by deg_computed decreasingly
 
 exec(param_from_bash())
 args = eval(ARG_STR)
