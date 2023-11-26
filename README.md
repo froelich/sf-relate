@@ -41,7 +41,6 @@ bash 2_sketch.sh
 bash 3_run_MHE.sh
 bash 4_verify_output.sh
 ```
-Note that the scripts download some necessary dependencies to fetch and maniuplate 1000 Genome from PLINK2's 1000 Genome Resources, formatted in `.pgen`.
 
 ## Preparation of Test Data from [1000 Genomes](https://pubmed.ncbi.nlm.nih.gov/36055201/)
 The following describes how to generate example test data based on 1000 Genomes phase 3, phased data hosted on [PLINK2](https://www.cog-genomics.org/plink/2.0/resources#phase3_1kg).
@@ -60,6 +59,7 @@ The file `notebooks/param.sh` stores the default parameters used in the generati
 ```
 bash 0_prepare_1KG.sh
 ```
+Note that this script download some necessary dependencies to fetch and manipulate 1000 Genomes from PLINK2's 1000 Genome Resources, formatted in `.pgen`.
 
 ## SF-Relate Usage
 To run SF-Relate on more than 2 parties, run it between every pair of parties.
