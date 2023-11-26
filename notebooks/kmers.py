@@ -40,7 +40,6 @@ class HaplotypeArray:
 
     @staticmethod
     def read_cM(conf, chr_range, plot=False):
-        from matplotlib import pyplot as plt
         cMs = [None] * chr_range.start
         if plot:
             raise NotImplementedError("debug mode is disabled")
