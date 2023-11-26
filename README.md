@@ -55,13 +55,13 @@ The file `notebooks/param.sh` stores the default parameters used in the generati
 ### Extra Dependencies 
 - [PLINK 2, build 2023.11.23](https://www.cog-genomics.org/plink/2.0/) is required for manipulating the 1000 Genome data.
 - [Pgenlib v0.9.1](https://pypi.org/project/Pgenlib/) is required for reading the PLINK2 `.pgen` files in Python.
-- Linux commandline tools `wget` and `unzip` (install via `sudo apt-get install wget unzip` if you have admin rights).
+- Linux command line tools `wget` and `unzip` (install via `sudo apt-get install wget unzip` if you have admin rights).
 
 ### Usage
 ```
 bash 0_prepare_1KG.sh
 ```
-Note that this script download some necessary dependencies to fetch and manipulate 1000 Genomes from PLINK2's 1000 Genome Resources, formatted in `.pgen`.
+Note that this script downloads some necessary dependencies to fetch and manipulate 1000 Genomes from PLINK2's 1000 Genome Resources, formatted in `.pgen`.
 
 ## SF-Relate Usage
 To run SF-Relate on more than 2 parties, run it between every pair of parties.
@@ -124,7 +124,7 @@ In practice, each party runs their process on their own machine and provides the
 
 #### Output
 Once SF-Relate finishes, it stores its output at `out/demo/`, with the following files
-- `[0-floor(n/8192)]_party{i}.csv` stores the indicator for each local sample on party {i}, specifying whether they have a relative. The order in which the boolean value appears correspond to the order in which the haplotype/genotypes appear in the input.
+- `[0-floor(n/8192)]_party{i}.csv` stores the indicator for each local sample on party {i}, specifying whether they have a relative. The order in which the boolean value appears corresponds to the order in which the haplotype/genotypes appear in the input.
 - `[X,Y,Z]/test.txt` stores the log of each party's execution.
 
 ### Step 4 --- Verifying the output
