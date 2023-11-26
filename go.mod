@@ -5,7 +5,7 @@ go 1.18
 require (
 	github.com/BurntSushi/toml v0.4.1
 	github.com/hhcho/mpc-core v0.0.0-20220828210829-24cf7abd1073
-	github.com/hhcho/sfgwas v0.0.0-20231107161330-c80c796040cc // uses the sf-relate branch
+	github.com/hhcho/sfgwas v0.0.0-20231125063502-a08fb54135b7 // uses the sf-relate branch
 	github.com/ldsec/lattigo/v2 v2.4.0
 	github.com/sbinet/npyio v0.7.0
 	go.dedis.ch/onet/v3 v3.2.10
@@ -14,13 +14,23 @@ require (
 
 require (
 	github.com/aead/chacha20 v0.0.0-20180709150244-8b13a72661da // indirect
+	github.com/containerd/cgroups v0.0.0-20201119153540-4cbc285b3327 // indirect
+	github.com/coreos/go-systemd/v22 v22.1.0 // indirect
 	github.com/daviddengcn/go-colortext v1.0.0 // indirect
+	github.com/docker/go-units v0.4.0 // indirect
+	github.com/elastic/gosigar v0.12.0 // indirect
 	github.com/fanliao/go-concurrentMap v0.0.0-20141114143905-7d2d7a5ea67b // indirect
+	github.com/godbus/dbus/v5 v5.0.3 // indirect
+	github.com/gogo/protobuf v1.3.1 // indirect
 	github.com/google/uuid v1.3.0 // indirect
 	github.com/gorilla/websocket v1.4.2 // indirect
 	github.com/hhcho/frand v1.3.1-0.20210217213629-f1c60c334950 // indirect
 	github.com/ldsec/unlynx v1.4.3 // indirect
 	github.com/montanaflynn/stats v0.6.6 // indirect
+	github.com/opencontainers/runtime-spec v1.0.2 // indirect
+	github.com/pkg/errors v0.9.1 // indirect
+	github.com/raulk/clock v1.1.0 // indirect
+	github.com/raulk/go-watchdog v1.2.0 // indirect
 	github.com/smartystreets/goconvey v1.6.6 // indirect
 	github.com/stretchr/testify v1.7.0 // indirect
 	go.dedis.ch/fixbuf v1.0.3 // indirect

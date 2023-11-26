@@ -63,10 +63,7 @@ class HaplotypeArray:
 
     @staticmethod
     def read_pos(conf, chr_id):
-        pos = np.loadtxt(f"data/pos/chr{chr_id}.txt")
-        filt_file = f"{conf['test_dir']}maf/0.01/chr{chr_id}.npy" 
-        filt = np.load(filt_file)
-        pos = pos[filt]
+        pos = np.loadtxt(f"{conf['test_dir']}/pos/0.01/chr{chr_id}.txt")
         return pos
 
     @staticmethod

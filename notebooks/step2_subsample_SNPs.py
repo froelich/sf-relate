@@ -4,8 +4,6 @@ from user_config import conf
 import pandas as pd
 import numpy as np
 
-%cd notebooks
-
 if __name__ == "__main__":
     conf['n_job'] = 16
     exec(param_from_bash())
@@ -21,11 +19,7 @@ if __name__ == "__main__":
     init_conf(conf, n)
     conf['no_hashing'] = True
     print_summary(conf)
-    M = 0
-    for chromo in range(1, 23):
-        filt = np.load(f"data/maf/chr{chromo}.npy")
-        M += filt.sum()
-
+    M = np.fromfile(f"{test_dir}/geno/party1/all_chrs_maf0.01.bin",dtype=np.int8).shape[0]//n
     print(f"#SNP = {M}")
     snp_ratios = [0.1, 0.4, 0.7, 0.8, 0.9, 1]
     

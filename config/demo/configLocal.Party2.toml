@@ -1,6 +1,6 @@
 separator = ' '
 
 # should update the data directory correspondingly
-simple_data_path = "notebooks/data/2party_100/geno/party2/all_chrs_maf0.01.bin" 
-row_index_file= "notebooks/data/2party_100/table/mode4cM8len80k8/tables/party2/ID_table.npz"
-column_index_file= "notebooks/data/2party_100/sketched/SNPs_70.npz"
+simple_data_path = "notebooks/data/2party_1601/geno/party2/all_chrs_maf0.01.bin"
+row_index_file= "notebooks/data/2party_1601/table/mode4cM4len160k8/tables_tmp/party2/ID_table.npz"
+column_index_file= "notebooks/data/2party_1601/sketched/SNPs_70.npz"

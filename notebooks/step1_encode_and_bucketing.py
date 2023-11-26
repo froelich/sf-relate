@@ -448,7 +448,10 @@ def find_per_sample_recall(conf, t, B, half_mode=False):
                 print(bcolors.OKBLUE, end='')
             else:
                 print(bcolors.OKGREEN, end='')
-            print(f"** deg {deg} found rate = {found_rate * 100:.4f}% = {cnt}/{n_deg} **")
+            if n_deg == 0:
+                print(f"** No deg {deg} is present in dataset")
+            else:
+                print(f"** deg {deg} found rate = {found_rate * 100:.4f}% = {cnt}/{n_deg} **")
             rst[deg] += (found_rate) / 2
     print(f"!!    ** total = {total_cnt / total_n * 100:.4f}% = {total_cnt}/{total_n} ** {bcolors.ENDC}")
     return rst
@@ -578,17 +581,6 @@ def check_table(conf, tmp="_tmp", cap=1, half_mode=False):
     stop_timer(start)
     return recalls
 
-# this function is only used in the analysis
-def get_table_stats(hashes, entropy=False):
-    uniques, bucket_sizes = np.unique(hashes, return_counts=True)
-    if not entropy:
-        return len(uniques), bucket_sizes
-    else:
-        probs = bucket_sizes/len(hashes)
-        ent = scipy.stats.entropy(probs)
-        max_cnt = np.max(bucket_sizes)
-        return len(uniques), bucket_sizes, ent, max_cnt
-
 if __name__ == '__main__':
     # the actual test
     from user_config import conf
@@ -602,4 +594,4 @@ if __name__ == '__main__':
     half_mode=False
     if half_mode:
         conf['key_space_size'] = int(np.ceil(conf['key_space_size'] / 2))
-    recalls, table_cnts = run_two_party_exp(conf, n, no_param=False, args=args, tmp='_time_half', half_mode=half_mode, tau=64)
+    recalls, table_cnts = run_two_party_exp(conf, n, no_param=False, args=args, tmp='_tmp', half_mode=half_mode, tau=64)

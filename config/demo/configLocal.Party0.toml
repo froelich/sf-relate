@@ -2,5 +2,5 @@
 separator = ' '
 
 # should update the data directory correspondingly
-row_index_file= "notebooks/data/2party_100/table/mode4cM8len80k8/tables/party1/ID_table.npz"
-column_index_file= "notebooks/data/2party_100/sketched/SNPs_70.npz"
+row_index_file= "notebooks/data/2party_1601/table/mode4cM4len160k8/tables_tmp/party1/ID_table.npz"
+column_index_file= "notebooks/data/2party_1601/sketched/SNPs_70.npz"

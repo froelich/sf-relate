@@ -31,43 +31,33 @@ go build
 If `go build` produces an error, run commands suggested by Go and try again. If the build
 finishes without any output, the package has been successfully configured.
 
-## Preparation of Test Data from [UK Biobank](https://www.ukbiobank.ac.uk/) 
-The following describes how to generate example test data using UK Biobank.
-Note that this requires access to the UK Biobank. We are working on new demonstrations using public resources like [1000 Genomes](https://www.internationalgenome.org/).
+## Preparation of Test Data from [1000 Genomes](https://pubmed.ncbi.nlm.nih.gov/36055201/)
+The following describes how to generate example test data based on 1000 Genomes phase 3, phased data hosted on [PLINK2](https://www.cog-genomics.org/plink/2.0/resources#phase3_1kg).
 
 The generated test data are split between two parties. Party `i`'s local data is stored in
 the `notebooks/data/2party_{n}/party{i}`,
 where `n` is the number of samples on each party, and `i` is 0-indexed.
+By default, we use `n=1601` (i.e. all samples from 1000 Genomes).
 The file `notebooks/param.sh` stores the default parameters used in the generation process and can be modified when needed.
 
 ### Extra Dependencies 
-- [qctool v2.2.0](https://www.well.ox.ac.uk/~gav/qctool_v2/documentation/download.html) is required for parsing the BGEN files.
+- [PLINK 2, build 2023.11.23](https://www.cog-genomics.org/plink/2.0/) is required for manipulating the 1000 Genome data.
+- [Pgelib v0.9.1](https://pypi.org/project/Pgenlib/) is required for reading the PLINK2 `.pgen` files.
 
 ### Usage
-To generate an example test case, make sure the [correct data](#uk-biobank-input) are stored in `notebooks/data` as specified, and then run 
 ```
-cd notebooks
-bash step0_prepare_UKB_testcase.sh
+bash 0_prepare_1KG.sh
 ```
-
-### UK Biobank Input 
-The following files have to be placed in `notebooks/data/` in order for the scripts to work properly.
-- `raw/chr[1-22].bgen` contains the BGENv1.2 files in UKB's release 3 (in particular, the [v2 phased haplotypes](https://biobank.ndph.ox.ac.uk/ukb/label.cgi?id=100319)).
-- `maf/ukb_snp_qc.txt` contains the officially-released SNP QC information.
-- `maf/chr[1-22].txt` stores the officially-released minor allele frequencies (MAF) on SNPs that appear on the haplotypes. 
-
-Note that the official MAF include imputed SNPs that are not used in SF-Relate, so we have provided an example script `notebooks/step0_0_UKB_maf.py` for the removal of those SNPs (which overwrite the `maf/chr[1-22].txt` files).
-
-### Output Format 
-For output formats, see the input formats [SF-Relate Input Format](#input-format).
-
 
 ## SF-Relate Usage
 To run SF-Relate on more than 2 parties, run it between every pair of parties.
 
 ### Step 1 --- Hashing and bucketing
-To run the bucketing step, run `python3 notebooks/step1_encode_and_bucketing.py`.
-With the default parameters, for party `i`, the list of samples in buckets are stored at `notebooks/data/2party_100/table/mode4cM8len80k8/tables/party{i + 1}/ID_table.npz` (note the party's indices are shifted).
+To run the bucketing step, run
+```
+bash 1_hashing.sh
+```
+With the default parameters, for party `i`, the list of samples in buckets are stored at `notebooks/data/2party_1601/table/mode4cM4len160k8/tables/party{i + 1}/ID_table.npz` (note the party's indices are shifted).
 For real-case usages when datasets are on two machines, the directories in the scripts should be updated accordingly.
 
 #### Input Format
@@ -83,9 +73,8 @@ Additionally, the genetic map files need to be placed at
 - `notebooks/data/pos/chr[1-22].txt` contains the list of physical positions of each SNPs on the haplotypes.
 Note that the build 37 is used in UK Biobank data, and one needs to ensure that these physical positions match the build version used in the genetic maps.
 
-Other files generated from the [preparation step](#preparation-of-test-data-from-uk-biobank) but are not needed to run SF-Relate are:
+Other files generated from the [preparation step](#preparation-of-test-data-from-1000-genomes) are:
 - `party{i}/maf/{mf}/chr[1-22]_numsnps.txt` stores the number of SNPs in each haplotype.
-- `party{i}/maf/{mf}/chr[1-22].npy` stores a boolean vector, that indicates (filters) the subset of SNPs to be used in the KING computation (with respect to the original UKB haplotype panel).
 - `ground_truths/all_king_maf{mf}.npy` stores all pairwise KING coefficients between the samples, computed on the subset of `M` SNPs.
 - `ground_truths/KING.dat` stores all related pairs across the parties, where each row contains `P0	ID0	P1	ID1	Kinship	deg` with the following meaning
     - `P0` and `P1` specifies where the samples are located (party 0 or 1)
@@ -97,8 +86,7 @@ Other files generated from the [preparation step](#preparation-of-test-data-from
 #### Subsampling SNPs for Faster KING Computations
 Use the following to subsample SNPs for Step 2 in SF-Relate.
 ```
-cd notebooks
-python3 step2_1_subsample_SNPs.py
+bash 2_sketching.sh
 ```
 
 #### Setting the Configuration
@@ -109,7 +97,12 @@ The input directories are set to the tables generated with the default parameter
 In order to run MHE on other tables, update the directories in the local configurations accordingly.
 
 #### Running the MHE 
-An example make script `Makefile` shows how to run the online phases, MHE-Phase 1 and MHE-Phase 2 in SF-Relate.
+Use the following to run the two machines locally.
+```
+bash 3_run_MHE.sh
+```
+
+In more detail, an example make script `Makefile` shows how to run the online phases, MHE-Phase 1 and MHE-Phase 2 in SF-Relate.
 To run all parties, use `make -j3`.
 Otherwise, on two separate machines, party 1 should run `make X Z -j2` and party 2 should run `make Y`, with the ports in `config/demo` correctly adjusted.
 The script spawns 3 processes on the same machine---one for each of the two data-contributing parties (`PID=1` and `PID=2`)and the third for the an auxiliary party that helps synchronize the computation(`PID=0`). 
@@ -119,6 +112,12 @@ In practice, each party runs their process on their own machine and provides the
 Once SF-Relate finishes, it stores its output at `out/demo/`, with the following files
 - `[0-floor(n/8192)]_party{i}.csv` stores the indicator for each local sample on party {i}, specifying whether they have a relative. The order in which the boolean value appears correspond to the order in which the haplotype/genotypes appear in the input.
 - `[X,Y,Z]/test.txt` stores the log of each party's execution.
+
+### Step 4 --- Verifying the output
+Use the following script to report the recall and precision of the test.
+```
+bash 4_verify_output.sh
+```
 
 ## Contact for Questions
 Matthew Man-Hou Hong, matthong@mit.edu; 

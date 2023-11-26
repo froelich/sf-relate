@@ -353,7 +353,7 @@ minHash="minHash"
 exact="exact"
 Hamming="Hamming"
 '''
-    qq += ''.join(open('param.sh').readlines()[:-3])
+    qq += ''.join(open('param.sh').readlines()[:-2])
     qq += "\ntid=f\'"+ open('param.sh').readlines()[-1].replace("$", "").split("=")[1].strip() + "\'"
     # print(qq)
     return qq
@@ -367,8 +367,8 @@ ARG_STR = 'f"-h_mode 1 -n {n} -mode {samp_mode} -k {k} -l {l} -table_ratio 64 -L
 def find_max_king(conf, half_mode=False):
     tmp = "_half" if half_mode else ""
     try:
-        max_kings = np.load(f"plots/data/max_kings{tmp}.npy")
-        degrees = np.load(f"plots/data/degrees{tmp}.npy")
+        max_kings = np.load(f"{conf['test_dir']}/max_kings{tmp}.npy")
+        degrees = np.load(f"{conf['test_dir']}/degrees{tmp}.npy")
     except FileNotFoundError:
         all_king = None
         if not half_mode:
@@ -378,8 +378,8 @@ def find_max_king(conf, half_mode=False):
         # find max kinship per row/column
         max_kings = np.asarray([np.max(all_king, axis = 1- i) for i in range(2)])
         degrees = np.asarray([relativedegree(max_king) for max_king in max_kings])
-        np.save(f"plots/data/max_kings{tmp}.npy", max_kings)
-        np.save(f"plots/data/degrees{tmp}.npy", degrees)
+        np.save(f"{conf['test_dir']}/max_kings{tmp}.npy", max_kings)
+        np.save(f"{conf['test_dir']}/degrees{tmp}.npy", degrees)
     return max_kings, degrees
 
 def get_data(conf, test, numBlock=13):
@@ -390,7 +390,7 @@ def get_data(conf, test, numBlock=13):
         IDs = []
         scores = []
         for i in ob_range:
-            with open(f"{conf['test_dir']}/out/{test}/party{party_id + 1}/{i}_party{party_id + 1}.csv") as f:
+            with open(f"../out/{test}/{i}_party{party_id + 1}.csv") as f:
                 i = 0
                 for line in f:
                     i += 1
@@ -422,7 +422,7 @@ def get_classes(IDs_parties, scores_parties, max_kings, degrees):
         # ground_truth = np.unique(related[f'ID{party_id}'])
         good = np.intersect1d(ground_truth, watch)
         missed = ground_truth[~np.isin(ground_truth, watch)]
-        ttl = len(np.unique(watch))
+        ttl = np.int32(len(np.unique(watch)))
         extra = watch[~np.isin(watch, ground_truth)]
         caughts.append(good)
         misses.append(missed)
