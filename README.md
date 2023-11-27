@@ -7,8 +7,8 @@ Matthew Man-Hou Hong, David Froelicher, Ricky Magner, Victoria Popic, Bonnie Ber
 Under review, 2023
 
 This repository contains a set of scripts for generating test cases for testing sf-relate.
-- In the branch `1KG`, we demonstrate using the software to detect related samples in the publicly available [1000 Genomes Project](https://pubmed.ncbi.nlm.nih.gov/36055201/).
-- In the branch `UKB`, we store scripts specialized to generate the inputs from the __access-limited__ [UK-Biobank](https://www.ukbiobank.ac.uk/).
+- In the branch `1KG`, we demonstrate the software in detection of related samples in the publicly available [1000 Genomes Project](https://pubmed.ncbi.nlm.nih.gov/36055201/). (See [An Automatic Pipeline For Testing SF-Relate](#an-automatic-pipeline-for-1000-genomes-data))
+- In the branch `UKB`, we provide scripts for generating the test cases based on the __access-limited__ [UK-Biobank](https://www.ukbiobank.ac.uk/). The UK Biobank files need to be stored at the correct paths for these scripts.
 - For usages on other datasets, refer to [SF-Relate Usage](#sf-relate-usage)
 
 ## Install SF-Relate
