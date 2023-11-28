@@ -7,7 +7,7 @@ Matthew Man-Hou Hong, David Froelicher, Ricky Magner, Victoria Popic, Bonnie Ber
 Under review, 2023
 
 This repository contains a set of scripts for generating test cases for testing sf-relate.
-- In the branch `1KG`, we demonstrate the software in detection of related samples in the publicly available [1000 Genomes Project](https://pubmed.ncbi.nlm.nih.gov/36055201/). (See [An Automatic Pipeline For Testing SF-Relate](#an-automatic-pipeline-for-1000-genomes-data))
+- In the branch `1KG` (default), we demonstrate the software in detection of related samples in the __publicly available__ [1000 Genomes Project](https://pubmed.ncbi.nlm.nih.gov/36055201/). (See [An Automatic Pipeline For Testing SF-Relate](#an-automatic-pipeline-for-1000-genomes-data))
 - In the branch `UKB`, we provide scripts for generating the test cases based on the __access-limited__ [UK-Biobank](https://www.ukbiobank.ac.uk/). The UK Biobank files need to be stored at the correct paths for these scripts.
 - For usages on other datasets, refer to [SF-Relate Usage](#sf-relate-usage)
 
@@ -34,7 +34,6 @@ finishes without any output, the package has been successfully configured.
 
 
 ## SF-Relate Usage
-To run SF-Relate on more than 2 parties, run it between every pair of parties.
 
 ### Configuration
 
@@ -52,7 +51,7 @@ The genetic map files need to be placed at
 Note that the build 37/38 are used in UK Biobank data/1000 Genomes data, repectively. One needs to ensure that these physical positions match the build version used in the genetic maps for a customized case.
 
 
-For a test dataset of `n` individuals on each side, by default, it should be placed at `TESTDIR=notebooks/data/2party_{n}`, with the following contents.
+For a test dataset of `n` individuals on each side, by default, the data should be placed at `TESTDIR=notebooks/data/2party_{n}`, with the following contents.
 - `$TESTDIR/party{i}/haps/chr[1-22].npy` stores the phased haplotypes of party `i`, each being a numpy matrix of `2n` rows and `m` columns. 
 Haplotypes (rows) are encoded as vector of integers (`np.int8` or `np.int16`), and different bytes are considered different variants by default.
 - `$TESTDIR/geno/party{i+1}/all_chrs_maf{mf}.bin` stores a sample-major genotype count matrix of size `n` by `M`, where `M <= m` is the number of SNPs on which the KING kinship esimator (see [Manichaikul et al.](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC3025716/)) is computed. Each count (0/1/2) is encoded as individual bytes in the binary file.
@@ -77,13 +76,13 @@ bash 1_hashing.sh
 
 This script reads the parameters from `notebooks/param.sh` and runs `notebooks/step1_encode_and_bucketing.py`, which creates the output directory `$TESTDIR/table/mode4cM4len160k8/` containing the logs `hash.log`, and for each party `i`, the list of buckets to be used in [step 2](#step-2-mhe) are stored at `tables/party{i + 1}/ID_table.npz`.
 
-Note that the output path may change customized parameters are used.
+Note that the output path may change when customized parameters are used.
 
-For other usages, such as when datasets are on two machines, the parameters and directories in `notebooks/params.sh` and `step1_encode_and_bucketing.py` should be updated accordingly.
+For other usages, such as when datasets are on two separate machines, the parameters and directories in `notebooks/params.sh` and `step1_encode_and_bucketing.py` should be updated accordingly.
 
 ### Step 2: MHE
 #### Subsampling SNPs for Faster KING Computations
-To run the first part of step 2, which subsample a fraction of loci to be used in MHE, run
+To run the first part of step 2, which subsamples a fraction of loci to be used in MHE, run
 ```
 bash 2_sketching.sh
 ```
@@ -91,7 +90,7 @@ or `cd notebooks;step2_subsample_SNPs.py`. This script reads in the number of SN
 
 
 #### Running the MHE 
-To run the second part of step2 locally, which involves running the MHE for kinship evaluation and accumulation, run
+To run the second part of step 2 locally, which involves running the MHE for kinship evaluation and accumulation, run
 ```
 bash 3_run_MHE.sh
 ```
