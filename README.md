@@ -174,11 +174,11 @@ To run step 0, which samples shared parameters, follow the example instructions 
 python3 step0a_sample_hash_randomness.py -out trial -maf trial/maf -pos trial/pos -gmap trial/gmap -enclen 80 -N 204928 -k 8 -seglen 8 -steplen 4 -l 4
 python3 step0b_sample_SNPs.py -M 145181 -s 0.7 -out trial/sketched
 ```
-Be sure to share the parameters across the machines before executing [step 1](#step-1-hashing).
+Be sure to share the outputs of these scripts across the machines before executing [step 1](#step-1-hashing).
 ### Step 1: Hashing
 Step 1 hashes the input samples into buckets, and needs to be executed on the two data parties locally as they handle sensitive data.
 ```bash
-# REQUIRE: already run step0.sh and have the same parameters.
+# REQUIRE: already run step0.sh and share the outputs.
 # Run on one machine
 python3 step1_hashing.py -n 1601 -param trial -out trial/party1/table -hap trial/party1/haps -L 3
 # # Run on the other machine
