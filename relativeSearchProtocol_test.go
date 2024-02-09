@@ -8,11 +8,8 @@ package relativeMatch
 // export FOLDER="config_local/$t/"
 
 import (
-	"fmt"
-	"io/ioutil"
 	"math"
 	"os"
-	"path/filepath"
 	"relativeMatch/internal"
 	"strconv"
 	"sync"
@@ -27,31 +24,13 @@ var pid, _ = strconv.Atoi(os.Getenv("PID"))
 var folder = os.Getenv("FOLDER")
 var paraRun, _ = strconv.Atoi(os.Getenv("PARA"))
 
-func readNumSNPs(pi *ProtocolInfo, sketch_id int) int {
-	dir, _ := filepath.Split(pi.columnIndexFile)
-	fname := dir + fmt.Sprintf("num_SNP%d.txt", sketch_id)
-	content, err := ioutil.ReadFile(fname)
-	if err != nil {
-		log.Fatal(err)
-	}
-	numberOfColumns, err := strconv.Atoi(string(content))
-	if err != nil {
-		log.Fatal(err)
-	}
-	log.LLvl1("Number of columns: ", numberOfColumns)
-	return numberOfColumns
-}
-
 func (pi *ProtocolInfo) inferParams(hard_reset bool) {
 	// if pid > 0 {
 	if !hard_reset {
 		rowIndexVector, colIndexVector := internal.ReadNPZVectors(pi.rowIndexFile, pi.columnIndexFile)
 		if pi.numberOfColumns <= 0 {
-			pi.numberOfColumns = readNumSNPs(pi, 100)
-		}
-		// assert that numberOfColumns >= numberOfColumnsTest
-		if pi.numberOfColumns < pi.numberOfColumnsTest {
-			log.Fatal("numberOfColumns < numberOfColumnsTest")
+			// numberOfColumns is the total number of Columns(?)
+			pi.numberOfColumns = pi.M
 		}
 		log.LLvl1("Scale down factor: ", pi.scaleDown)
 		if pi.numberOfColumnsTest <= 0 {
@@ -68,9 +47,13 @@ func (pi *ProtocolInfo) inferParams(hard_reset bool) {
 			pi.scaledownLocal = float64(pi.numberOfColumnsTest) / (10.0)
 		}
 		pi.scaleDown = 1.0
+		// assert that numberOfColumns >= numberOfColumnsTest
+		if pi.numberOfColumns < pi.numberOfColumnsTest {
+			log.Fatal("numberOfColumns < numberOfColumnsTest")
+		}
 	} else {
 		rowIndexVector, colIndexVector := internal.ReadNPZVectors(pi.rowIndexFile, pi.columnIndexFile)
-		pi.numberOfColumns = readNumSNPs(pi, 100)
+		pi.numberOfColumns = pi.M
 		if pi.numberOfColumns < pi.numberOfColumnsTest {
 			log.Fatal("numberOfColumns < numberOfColumnsTest")
 		}
@@ -94,8 +77,14 @@ func TestRelativeSearchProtocol(t *testing.T) {
 	if prot.TestSignTest == 0 {
 		// test the main setting of the protocol
 		globalResult := runPhase1withTime(prot, configFolder)
-		if pid > 0 && prot.reveal == 0 {
+		if pid > 0 {
 			timeTotal = time.Now()
+			runPhase2WithTime(prot, globalResult)
+		}
+	} else if prot.TestSignTest == 1 {
+		cps := prot.basicProt.Cps
+		globalResult := runFakePhase1withTime(prot, cps)
+		if pid > 0 && prot.reveal == 2 {
 			runPhase2WithTime(prot, globalResult)
 		}
 	} else {
@@ -105,7 +94,7 @@ func TestRelativeSearchProtocol(t *testing.T) {
 	prot.SyncAndTerminate(true)
 }
 
-func runPhase1withTime(prot *ProtocolInfo, configFolder string) ResultOutput {
+func runPhase1withTime(prot *ProtocolInfo, configFolder string) GlobalPhase1Result {
 	timeStart := time.Now()
 	reportStats(timeStart, prot, " start phase 1: ")
 	globalResult := startProtocols(prot, configFolder)
@@ -113,18 +102,26 @@ func runPhase1withTime(prot *ProtocolInfo, configFolder string) ResultOutput {
 	return globalResult
 }
 
-func runFakePhase1withTime(prot *ProtocolInfo, cps *crypto.CryptoParams) ResultOutput {
+func runFakePhase1withTime(prot *ProtocolInfo, cps *crypto.CryptoParams) GlobalPhase1Result {
 	timeStart := time.Now()
 	reportStats(timeStart, prot, " start encrypting 0 in a fakse phase 1: ")
-	globalResult := makeZerosForAccuTest(prot, cps, pid)
+	globalResult := makeFloatVecForAccuTest(prot, cps, pid)
 	reportStats(timeStart, prot, " finish encrypting 0 in a fakse phase 1: ")
 	return globalResult
 }
 
-func runPhase2WithTime(prot *ProtocolInfo, globalResult ResultOutput) {
+func runPhase2WithTime(prot *ProtocolInfo, globalResult GlobalPhase1Result) {
 	timeStart := time.Now()
 	reportStats(timeStart, prot, " start phase 2 of MHE : ")
-	prot.accumulateByID(globalResult.AllResult, pid)
+	if prot.reveal == 0 || prot.reveal == 1 || prot.reveal == 2 {
+		// by default, accumulate every BatchCVec stored
+		log.LLvl1("accumulating " + strconv.Itoa(len(globalResult.Result)) + " BatchCVecs")
+		for i := 0; i < len(globalResult.Result); i++ {
+			prot.accumulateByID(globalResult.Result[i], pid, i)
+		}
+	} else if prot.reveal == 3 {
+		// nothing to do since already saved decryption at the end of phase 1
+	}
 	reportStats(timeStart, prot, " perform accumulation (phase 2) protocol: ")
 }
 
@@ -141,7 +138,7 @@ func reportStats(timeStart time.Time, prot *ProtocolInfo, part_name string) {
 	prot.basicProt.MpcObj.GetNetworks().PrintNetworkLog()
 }
 
-func makeZerosForAccuTest(prot *ProtocolInfo, cps *crypto.CryptoParams, pid int) ResultOutput {
+func makeFloatVecForAccuTest(prot *ProtocolInfo, cps *crypto.CryptoParams, pid int) (dummy GlobalPhase1Result) {
 	// make encryptions of 0 to test accumuluation (MHE-Phase 2)'s running time only
 	if pid > 0 && !prot.useMPC {
 		prot.alwaysDecrypting()
@@ -149,34 +146,45 @@ func makeZerosForAccuTest(prot *ProtocolInfo, cps *crypto.CryptoParams, pid int)
 	}
 	partitionSize := int(math.Ceil((float64(prot.totalNbrOfRowsTest)/float64(paraRun))/float64(prot.batchLength))) * prot.batchLength
 	last_start := prot.startKey
-	var globalResult ResultOutput
-	globalResult.AllResult = make(map[int][]crypto.CipherVector)
-	for exec := 0; exec < paraRun; exec++ {
-		newEndKey := last_start + partitionSize
-		if newEndKey > prot.startKey+prot.totalNbrOfRowsTest {
-			newEndKey = prot.startKey + prot.totalNbrOfRowsTest
+	var globalResult GlobalPhase1Result
+	globalResult.Result = make([]BatchedCVec, 0)
+	for k := 0; k < 4; k++ {
+		for exec := 0; exec < paraRun; exec++ {
+			newEndKey := last_start + partitionSize
+			if newEndKey > prot.startKey+prot.totalNbrOfRowsTest {
+				newEndKey = prot.startKey + prot.totalNbrOfRowsTest
+			}
+			var localResult LocalPhase1Result
+			localResult.Result = make([]crypto.CipherVector, 0)
+			numBlocks := int(math.Ceil(float64(newEndKey-last_start) / float64(prot.batchLength)))
+			for i := 0; i < numBlocks; i++ {
+				// manually create kinship values for later accumulations
+				val := make([]float64, prot.batchLength)
+				for j := 0; j < prot.batchLength; j++ {
+					if j%10 != 0 && k >= 2 {
+						val[j] = 0.0
+					} else {
+						val[j] = 1.0
+					}
+				}
+				vec, _ := crypto.EncryptFloatVector(cps, val)
+				localResult.Result = append(localResult.Result, crypto.DropLevelVec(cps, vec, 2))
+			}
+			globalResult.Result[k][exec] = localResult.Result[k]
+			last_start += partitionSize
 		}
-		var partialGlobalResult ResultOutput
-		partialGlobalResult.Result = make([]crypto.CipherVector, 0)
-		numBlocks := int(math.Ceil(float64(newEndKey-last_start) / float64(prot.batchLength)))
-		for i := 0; i < numBlocks; i++ {
-			partialGlobalResult.Result = append(partialGlobalResult.Result, crypto.DropLevelVec(cps, crypto.CZeros(cps, 1), 2))
-		}
-		if prot.reveal == 0 {
-			globalResult.AllResult[exec] = partialGlobalResult.Result
-		}
-		last_start += partitionSize
 	}
 	return globalResult
 }
 
-func startProtocols(prot *ProtocolInfo, configFolder string) (globalResult ResultOutput) {
+func startProtocols(prot *ProtocolInfo, configFolder string) (globalResult GlobalPhase1Result) {
 	// partitionSize is the number of rows that each subprocess will process
 	// which is the total number of rows divided by the number of subprocesses (paraRun or PARA in the bash script)
 	// (rounded up to the nearest multiple of prot.batchLength = B = how many values are encrypted in each ciphertext)
 	partitionSize := int(math.Ceil((float64(prot.totalNbrOfRowsTest)/float64(paraRun))/float64(prot.batchLength))) * prot.batchLength
 
 	globalWg := sync.WaitGroup{}
+	mutex := sync.Mutex{}
 	if prot.useMPC {
 		prot.scaleDown = 1.0
 	}
@@ -187,10 +195,14 @@ func startProtocols(prot *ProtocolInfo, configFolder string) (globalResult Resul
 		log.Panic("numThreads must be >= paraRun * ((NumMainParties * 3) + 1)")
 	}
 	last_start := prot.startKey // corrected to start_key instead of 0
-	globalResult.AllResult = make(map[int][]crypto.CipherVector)
+	numArrays := []int{1, len(prot.threshValue), len(prot.discretizedThresh), 0}[prot.reveal]
+	globalResult.Result = make([]BatchedCVec, numArrays)
+	for i := 0; i < numArrays; i++ {
+		globalResult.Result[i] = make(BatchedCVec)
+	}
 	for exec := 0; exec < paraRun; exec++ {
 		//execThreads := paraRun * 3
-		go func(exec int, last_start int, prot *ProtocolInfo) {
+		go func(exec int, last_start int, prot *ProtocolInfo, mutex *sync.Mutex) {
 			defer globalWg.Done()
 			newBootMap := make(map[string]int, 0)
 			for i, v := range prot.bootMap {
@@ -211,17 +223,17 @@ func startProtocols(prot *ProtocolInfo, configFolder string) (globalResult Resul
 				scaleDown:           prot.scaleDown,
 				numThreads:          prot.numThreads,
 				threshValue:         prot.threshValue,
+				discretizedThresh:   prot.discretizedThresh,
 				bucketSize:          prot.bucketSize,
 				blinding:            prot.blinding,
 				single:              prot.single,
+				M:                   prot.M,
 				reveal:              prot.reveal,
 				simpleDataPath:      prot.simpleDataPath,
-				resultFolder:        prot.resultFolder,
 				startingIndex:       prot.startingIndex,
 				numberOfColumns:     prot.numberOfColumns,
 				numberOfColumnsTest: prot.numberOfColumnsTest,
 				npz:                 prot.npz,
-				separator:           prot.separator,
 				totalNbrOfRows:      prot.totalNbrOfRows,
 				totalNbrOfRowsTest:  prot.totalNbrOfRowsTest,
 				blockLimit:          prot.blockLimit,
@@ -240,11 +252,16 @@ func startProtocols(prot *ProtocolInfo, configFolder string) (globalResult Resul
 			if pid == 1 {
 				sending = !sending
 			}
-			partialGlobalResult := newProt.BatchProtocols(configFolder, sending, prot.startKey)
-			if prot.reveal == 0 {
-				globalResult.AllResult[exec] = partialGlobalResult.Result
+			partialGlobalResult := newProt.BatchProtocols(configFolder, sending, prot.startKey, mutex)
+			// assert that the numbers match
+			if numArrays != len(partialGlobalResult.Result) {
+				panic("numArrays != len(partialGlobalResult)")
 			}
-		}(exec, last_start, prot)
+			// need to append based on the number of computed vectors
+			for i := 0; i < len(partialGlobalResult.Result); i++ {
+				globalResult.Result[i][exec] = partialGlobalResult.Result[i]
+			}
+		}(exec, last_start, prot, &mutex)
 		last_start += partitionSize
 	}
 	globalWg.Wait()

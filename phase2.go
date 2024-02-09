@@ -14,7 +14,7 @@ import (
 	"go.dedis.ch/onet/v3/log"
 )
 
-func (pi *ProtocolInfo) accumulateByID(allResultsToCombine map[int][]crypto.CipherVector, pid int) (rst crypto.CipherVector) {
+func (pi *ProtocolInfo) accumulateByID(allResultsToCombine map[int]crypto.CipherVector, pid int, name int) (rst crypto.CipherVector) {
 	cps := pi.basicProt.Cps
 
 	// read in id
@@ -57,10 +57,15 @@ func (pi *ProtocolInfo) accumulateByID(allResultsToCombine map[int][]crypto.Ciph
 	mask := make([]float64, numSlots)
 	ptFive := make([]float64, numSlots)
 	for i := range ptFive {
-		ptFive[i] = 3.5 * scaleDown
+		// the value of ptFive is 3.5 if in reveal == 0 mode, otherwise it is 0.5
+		if pi.reveal == 0 {
+			ptFive[i] = 3.5 * scaleDown
+		} else {
+			ptFive[i] = 0.5 * scaleDown
+		}
 	}
 	for i := numSlots - 1; i >= lastBlockSize; i-- {
-		mask[i] = scaleDown
+		mask[i] = 0.0005 * scaleDown
 	}
 	maskEncoded, _ := crypto.EncodeFloatVector(cps, mask)
 	pointFiveEncoded, _ := crypto.EncodeFloatVector(cps, ptFive)
@@ -143,7 +148,9 @@ func (pi *ProtocolInfo) accumulateByID(allResultsToCombine map[int][]crypto.Ciph
 
 						// pt-wise multiply the two together so we get one result
 						// first multiplication --- check level later
-						extracted := crypto.CPMult(cps, rstCt, maskEncoded)
+						crypto.DecodeFloatVector(cps, maskEncoded)
+						extracted := crypto.CPMult(cps, crypto.CipherVector{rstCt}, maskEncoded)
+						crypto.CRescale(cps, extracted)
 						partialIDResult = crypto.CAdd(cps, partialIDResult, extracted)
 
 					}
@@ -151,6 +158,7 @@ func (pi *ProtocolInfo) accumulateByID(allResultsToCombine map[int][]crypto.Ciph
 					// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
 					foundInBlock := crypto.CipherVector{crypto.InnerSumAll(cps, partialIDResult)}
 					toSave := crypto.CPMult(cps, foundInBlock, maskOutputEncoded)
+					crypto.CRescale(cps, toSave)
 					local_mutex.Lock()
 					oblock = crypto.CAdd(cps, oblock, toSave)
 					local_mutex.Unlock()
@@ -173,14 +181,26 @@ func (pi *ProtocolInfo) accumulateByID(allResultsToCombine map[int][]crypto.Ciph
 		decrypted := pi.decryptVectorForDebugging(cps, oblock, pid)
 
 		// print out the block result here
-		save_decryption(pi, obid, pid, oend, idToCheck, obegin, decrypted)
+		if pi.reveal == 0 {
+			save_decryption(pi, strconv.Itoa(name), obid, pid, oend, idToCheck, obegin, decrypted)
+		}
+		if pi.reveal == 1 {
+			save_decryption(pi, "degree"+strconv.Itoa(name), obid, pid, oend, idToCheck, obegin, decrypted)
+		} else if pi.reveal == 2 {
+			save_decryption(pi, "kinship"+strconv.Itoa(name), obid, pid, oend, idToCheck, obegin, decrypted)
+		} else if pi.reveal == 3 {
+			panic("reveal == 3 does not do accumulation")
+		} else {
+			panic("unknown mode of revelation")
+		}
 	}
 	return
 }
 
-func save_decryption(pi *ProtocolInfo, obid int, pid int, oend int, idToCheck []int, obegin int, decrypted []complex128) {
+func save_decryption(pi *ProtocolInfo, name string, obid int, pid int, oend int, idToCheck []int, obegin int, decrypted []complex128) {
 	log.LLvl1("saving ", obid, "block")
-	filename := pi.resultFolder + strconv.Itoa(obid) + "_party" + strconv.Itoa(pid) + ".csv"
+	folder := os.Getenv("FOLDER")
+	filename := folder + name + "_" + strconv.Itoa(obid) + "_party" + strconv.Itoa(pid) + ".csv"
 	csvOut, _ := os.Create(filename)
 	writer := csv.NewWriter(csvOut)
 	writer.Write([]string{"ID", "Detected"})

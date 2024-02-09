@@ -1,6 +1,9 @@
-# party 0 is run on the same machine as party 1
-separator = ' '
-
-# should update the data directory correspondingly
-row_index_file= "notebooks/data/2party_1601/table/mode4cM4len160k8/tables_tmp/party1/ID_table.npz"
-column_index_file= "notebooks/data/2party_1601/sketched/SNPs_70.npz"
+# This is the directory the binary genotype 
+# file of all individuals. Each genotype is 
+# encoded as a byte in individual-major order.
+# So there are a total of n * M bytes.
+simple_data_path = "notebooks/trial/party1/geno/all_chrs.bin"
+# this is the output by the Python step1 script
+row_index_file= "notebooks/trial/party1/table/ID_table.npz"
+# this is the output by the Python step0b script.
+column_index_file="notebooks/trial/sketched/SNPs.npz"

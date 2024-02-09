@@ -2,9 +2,7 @@ package relativeMatch
 
 import "C"
 import (
-	"encoding/csv"
 	"fmt"
-	"io"
 	"math"
 	"os"
 	"path/filepath"
@@ -27,30 +25,30 @@ var boot = "_boot"
 var dec = "_dec"
 
 type ProtocolInfo struct {
-	basicProt      *BasicProtocolInfo
-	simpleData     [][]float64 // samples - snps
-	rowIndex       []float64
-	comparisonMap  map[string][]int
-	bootMap        map[string]int
-	approxInt      crypto.IntervalApprox
-	scaleDown      float64
-	scaledownLocal float64
-	numThreads     int
-	threshValue    []float64
-	bucketSize     int
-	blinding       bool
-	single         bool // row packing, used for small
-	reveal         int  // reveal = -1 = reveal all; reveal = 1 = reveal degree only; OLD: 0: reveal presence only, 1: reveal results, 2: reveal positive results only
-	TestSignTest   int
-	Debug_ST_flag  bool
+	basicProt         *BasicProtocolInfo
+	simpleData        [][]float64 // samples - snps
+	rowIndex          []float64
+	comparisonMap     map[string][]int
+	bootMap           map[string]int
+	approxInt         crypto.IntervalApprox
+	scaleDown         float64
+	scaledownLocal    float64
+	numThreads        int
+	threshValue       []float64
+	discretizedThresh []float64
+	bucketSize        int
+	blinding          bool
+	single            bool // row packing, used for small
+	reveal            int  // reveal = -1 = reveal all; reveal = 1 = reveal degree only; OLD: 0: reveal presence only, 1: reveal results, 2: reveal positive results only
+	TestSignTest      int
+	Debug_ST_flag     bool
+	M                 int // number of SNPs
 
 	simpleDataPath      string
-	resultFolder        string
 	startingIndex       int
 	numberOfColumns     int
 	numberOfColumnsTest int
 	npz                 bool
-	separator           string
 	n                   int
 	totalNbrOfRows      int
 	totalNbrOfRowsTest  int
@@ -70,12 +68,12 @@ type ProtocolInfo struct {
 type ConfigRelative struct {
 	SimpleDataPath      string           `toml:"simple_data_path"`
 	Separator           string           `toml:"separator"`
-	ResultFolder        string           `toml:"result_folder"`
 	NumberOfColumns     int              `toml:"number_of_columns"`
 	NumberOfColumnsTest int              `toml:"number_of_columns_test"`
 	StartingIndex       int              `toml:"starting_index"`
 	NumberOfThreads     int              `toml:"nbr_threads"`
 	ThreshValue         []float64        `toml:"thresh_value"`
+	DiscretizedThresh   []float64        `toml:"discretized_thresh"`
 	BucketSize          int              `toml:"bucket_size"`
 	ComparisonMap       map[string][]int `toml:"comparison_map"`
 	BootMap             map[string]int   `toml:"boot_map"`
@@ -95,6 +93,7 @@ type ConfigRelative struct {
 
 	Npz                bool   `toml:"npz"`
 	N                  int    `toml:"N"`
+	M                  int    `toml:"M"`
 	TotalNbrOfRows     int    `toml:"total_nbr_rows"`
 	TotalNbrOfRowsTest int    `toml:"total_nbr_rows_test"`
 	BlockLimit         int    `toml:"block_limit"`
@@ -135,17 +134,17 @@ func InitializeRelativeMatchingProtocol(pid int, configFolder string, network mp
 		scaleDown:           configRelativeGlobal.ScaleDown,
 		numThreads:          configRelativeGlobal.NumberOfThreads,
 		threshValue:         configRelativeGlobal.ThreshValue,
+		discretizedThresh:   configRelativeGlobal.DiscretizedThresh,
+		M:                   configRelativeGlobal.M,
 		bucketSize:          configRelativeGlobal.BucketSize,
 		blinding:            configRelativeGlobal.Blinding,
 		single:              configRelativeGlobal.Single,
 		reveal:              configRelativeGlobal.Reveal,
 		simpleDataPath:      configRelativeLocal.SimpleDataPath,
-		resultFolder:        configRelativeGlobal.ResultFolder,
 		startingIndex:       configRelativeLocal.StartingIndex,
 		numberOfColumns:     configRelativeGlobal.NumberOfColumns,
 		numberOfColumnsTest: configRelativeGlobal.NumberOfColumnsTest,
 		npz:                 configRelativeGlobal.Npz,
-		separator:           configRelativeLocal.Separator,
 		n:                   configRelativeGlobal.N,
 		totalNbrOfRows:      configRelativeGlobal.TotalNbrOfRows,
 		totalNbrOfRowsTest:  configRelativeGlobal.TotalNbrOfRowsTest,
@@ -161,31 +160,18 @@ func InitializeRelativeMatchingProtocol(pid int, configFolder string, network mp
 	}
 }
 
-// ComparisonResult contains the (raw) encrypted result of the comparison
-type ComparisonResult struct {
-	Result              []crypto.CipherVector
-	Index               []float64
-	OtherIndexEncrypted crypto.CipherVector
-	NbrRepeat           int
+type BatchedCVec map[int]crypto.CipherVector
+
+type KinshipResult struct {
+	Result crypto.CipherVector
 }
 
-// ResultOutput contains the (raw) encrypted result of the comparison AND the result to be revealed
-type ResultOutput struct {
-	AllResult           map[int][]crypto.CipherVector
-	Result              []crypto.CipherVector
-	OtherIndexEncrypted crypto.CipherVector
-	NbrRepeat           int
-	ResultControlled    []crypto.CipherVector
-	IndexLocal          crypto.CipherVector
+type GlobalPhase1Result struct {
+	Result []BatchedCVec // each element a maps from BatchID to a vector of ciphertext that encrypts the result (comparison values/kinships etc)
 }
 
-// ResultOutputDec contains the decrypted result
-type ResultOutputDec struct {
-	Result              [][]float64
-	OtherIndexEncrypted []float64
-	NbrRepeat           int
-	ResultControlled    [][]float64
-	IndexControlled     []float64
+type LocalPhase1Result struct {
+	Result []crypto.CipherVector
 }
 
 type ComparisonResultMPC struct {
@@ -257,26 +243,17 @@ func (pi *ProtocolInfo) alwaysDecrypting() {
 
 func (pi *ProtocolInfo) OpenInputData() (*os.File, []int32, []int32, [][]float64) {
 	var rowIndexVector, colIndexVector []int32
-	var inputData [][]float64
 	var matrixFile *os.File
 	var err error
 
-	if pi.npz {
-		// read number of columns from a file
-		rowIndexVector, colIndexVector = internal.ReadNPZVectors(pi.rowIndexFile, pi.columnIndexFile)
+	// read number of columns from a file
+	rowIndexVector, colIndexVector = internal.ReadNPZVectors(pi.rowIndexFile, pi.columnIndexFile)
 
-		matrixFile, err = os.Open(pi.simpleDataPath)
-		if err != nil {
-			log.Error(err)
-		}
-		return matrixFile, rowIndexVector, colIndexVector, nil
-	} else {
-		inputData, err = internal.LoadDataset(pi.simpleDataPath, []rune(pi.separator)[0], false)
-		if err != nil {
-			log.Fatal(err)
-		}
-		return nil, nil, nil, inputData
+	matrixFile, err = os.Open(pi.simpleDataPath)
+	if err != nil {
+		log.Error(err)
 	}
+	return matrixFile, rowIndexVector, colIndexVector, nil
 }
 
 func (pi *ProtocolInfo) readbatchOfInput(batchStart, exec int, matrixFile *os.File, rowIndexVector, colIndexVector []int32, dataset [][]float64, startKeyGlobal int) ([][]float64, []float64) {
@@ -328,14 +305,13 @@ func ReadRowNpz(rowIndex int, matrixFile *os.File, totalNbrOfRows, numberOfColum
 }
 
 // BatchProtocols executes the protocol iteratively on batches of the inputs, and each batch has max of 8192 comparisons (in CKKS)
-func (pi *ProtocolInfo) BatchProtocols(configFolder string, sending bool, startKeyGlobal int) ResultOutput {
+func (pi *ProtocolInfo) BatchProtocols(configFolder string, sending bool, startKeyGlobal int, mutex *sync.Mutex) LocalPhase1Result {
 	pid := pi.basicProt.MpcObj[0].GetPid()
 	if pid > 0 {
 		if !pi.useMPC {
 			pi.alwaysBootstrapping()
 			pi.alwaysDecrypting()
 		}
-
 	}
 
 	var rowIndexVector, colIndexVector []int32
@@ -350,11 +326,10 @@ func (pi *ProtocolInfo) BatchProtocols(configFolder string, sending bool, startK
 
 	}
 
-	var batchResult ResultOutput
-	batchResult.Result = make([]crypto.CipherVector, 0)
-
+	var batchResult LocalPhase1Result
+	numArrays := []int{1, len(pi.threshValue), len(pi.discretizedThresh), 0}[pi.reveal]
+	batchResult.Result = make([]crypto.CipherVector, numArrays)
 	exec := 0
-	ownNetworkDec := pi.basicProt.MpcObj.GetNetworks()[pi.bootMap[strconv.Itoa(pid)+dec]]
 	// go through batches of input
 	for batchStart := pi.startKey; batchStart < pi.endKey; batchStart = batchStart + pi.batchLength {
 		time_start := time.Now()
@@ -362,36 +337,30 @@ func (pi *ProtocolInfo) BatchProtocols(configFolder string, sending bool, startK
 		pi.simpleData, pi.rowIndex = pi.readbatchOfInput(batchStart, exec, matrixFile, rowIndexVector, colIndexVector, dataset, startKeyGlobal)
 		exec++
 
-		currentResultHE, _ := pi.RelativeSearchProtocol(sending)
+		currentResultHE, _ := pi.RelativeSearchProtocol(sending, batchStart, mutex)
 
-		if pi.basicProt.MpcObj[0].GetPid() > 0 {
-			// decrypt and write all batch results
-			if pi.reveal == 1 || pi.reveal == -1 {
-				if pi.useMPC {
-					// MPC is not implemented
-					panic("MPC is not implemented")
-				} else {
-					for otherPid, result := range currentResultHE {
-						resultDec := postProcessCompResult(pi.basicProt.Cps, result, ownNetworkDec, pid, pi.localTest)
-						writeResultDec(pi.resultFolder, resultDec, pid, otherPid, batchStart)
-						if pi.localTest {
-							pi.readAndTestResults(pi.resultFolder, matrixFile, batchStart, pid, otherPid, exec, colIndexVector, configFolder)
-						}
-					}
-				}
-			} else if pi.reveal == 0 {
+		if pi.reveal == 0 || pi.reveal == 1 || pi.reveal == 2 {
+			if pi.basicProt.MpcObj[0].GetPid() > 0 {
 				// should append all result into a single result table for this batch
 				// need to figure out what pid to put here
 				otherPid := 3 - pid
 				rst := currentResultHE[otherPid]
-				batchResult.Result = append(batchResult.Result, rst.Result[0])
-			} else if pi.reveal == 3 {
-				// reveal all computed values
-				otherPid := 3 - pid
-				rst := currentResultHE[otherPid].Result[0]
-				cps := pi.basicProt.Cps
-				decrypted := pi.decryptVectorForDebugging(cps, rst, pid)
-				save_array(decrypted, fmt.Sprintf("%s/block_%.0f.csv", pi.resultFolder, float32(batchStart)/float32(pi.batchLength)), false, true)
+				// split the vector and append to the batch result
+				if numArrays != len(rst.Result[0]) {
+					panic("Number of arrays does not match")
+				}
+				for i := 0; i < numArrays; i++ {
+					batchResult.Result[i] = append(batchResult.Result[i], rst.Result[0][i])
+				}
+			}
+		} else if pi.reveal == 3 {
+			if pi.basicProt.MpcObj[0].GetPid() > 0 {
+				// decrypt results --- need to acquire a lock
+				mutex.Lock()
+				decrypted := pi.decryptVectorForDebugging(pi.basicProt.Cps, currentResultHE[3-pid].Result[0], pid)
+				mutex.Unlock()
+				folder := os.Getenv("FOLDER")
+				save_array(decrypted, folder+"kinship_"+strconv.Itoa(batchStart)+"_party"+strconv.Itoa(pid)+".txt", false, false)
 			}
 		}
 		log.LLvl1("Time for batch ", batchStart, " is ", time.Since(time_start))
@@ -399,167 +368,13 @@ func (pi *ProtocolInfo) BatchProtocols(configFolder string, sending bool, startK
 	return batchResult
 }
 
-func writeResultDec(filename string, results ResultOutputDec, pid, otherPid, fileIndex int) {
-	csvOut, _ := os.Create(filename + strconv.Itoa(pid) + "_" + strconv.Itoa(otherPid) + "_" + strconv.Itoa(fileIndex) + ".csv")
-	writer := csv.NewWriter(csvOut)
-
-	// what are the results?
-	// print a header row
-	writer.Write([]string{"IndexLocal", "OtherIndex", "Kinship", "Deg0", "Deg1", "Deg2", "Deg3", "SumDegs"})
-	var record []string // declare record outside loop to reduce allocations
-	for i := range results.IndexControlled {
-		// record IndexLocal, OtherIndex, ResultControlled, Result
-		record = append(record[:0], fmt.Sprintf("%.0f", results.IndexControlled[i]))
-		record = append(record, fmt.Sprintf("%.0f", results.OtherIndexEncrypted[i]))
-		for j := range results.Result {
-			// directly save kinship result here
-			var output string
-			if j == 0 {
-				output = fmt.Sprintf("%.8f", 1/2.0-1/4.0*results.Result[j][i])
-			} else {
-				output = fmt.Sprintf("%.8f", results.Result[j][i])
-			}
-			record = append(record, output)
-		}
-		// changed this --- need to check if MHE works properly
-		for j := range results.ResultControlled {
-			record = append(record, fmt.Sprintf("%.8f", results.ResultControlled[j][i]))
-		}
-
-		if i < 20 {
-			log.LLvl1(record)
-		}
-
-		writer.Write(record)
-	}
-	writer.Flush()
-
-}
-
-func (pi *ProtocolInfo) readAndTestResults(filename string, localData *os.File, fileIndex, pid, otherPid, exec int,
-	pidColVector []int32, otherPartyconfigFolder string) {
-
-	// read other party input
-	configRelativeOther := new(ConfigRelative)
-	if _, err := toml.DecodeFile(filepath.Join(otherPartyconfigFolder, fmt.Sprintf("configLocal.Party%d.toml", otherPid)), configRelativeOther); err != nil {
-		fmt.Println(err)
-	}
-	otherProto := ProtocolInfo{
-		simpleDataPath:      configRelativeOther.SimpleDataPath,
-		startingIndex:       configRelativeOther.StartingIndex,
-		separator:           configRelativeOther.Separator,
-		rowIndexFile:        configRelativeOther.RowIndexFile,
-		columnIndexFile:     configRelativeOther.ColumnIndexFile,
-		numberOfColumnsTest: pi.numberOfColumnsTest,
-		scaleDown:           pi.scaleDown,
-		npz:                 pi.npz,
-		totalNbrOfRows:      pi.totalNbrOfRows,
-		totalNbrOfRowsTest:  pi.totalNbrOfRowsTest,
-	}
-
-	otherMatrixFile, _, otherColIndexVector, otherDataset := otherProto.OpenInputData()
-	if otherColIndexVector != nil {
-		// seems like here it should be numberOfColumnsTest instead?
-		otherColIndexVector = otherColIndexVector[:pi.numberOfColumnsTest]
-	}
-
-	var otherData [][]float64
-	if !(otherDataset == nil) {
-		otherData = otherDataset
-	}
-
-	// read obtained results
-	csvIn, err := os.Open(filename + strconv.Itoa(pid) + "_" + strconv.Itoa(otherPid) + "_" + strconv.Itoa(fileIndex) + ".csv")
-	log.LLvl1(err)
-	reader := csv.NewReader(csvIn)
-	// ignore header
-	_, _ = reader.Read()
-	resultSize := pi.batchLength * pi.bucketSize
-	if pi.reveal == 0 {
-		resultSize = pi.batchLength
-	}
-	count := 0
-	all_expected_dist_XY := make([]complex128, resultSize)
-	all_expected_dist := make([]complex128, resultSize)
-	expected_kings := make([]complex128, resultSize)
-	for {
-		if count < resultSize {
-			// find the index too!
-			rec, err := reader.Read()
-			if err == io.EOF {
-				break
-			}
-			if err != nil {
-				log.Fatal(err)
-			}
-			localIndexRowFloat, _ := strconv.ParseFloat(rec[0], 64)
-			localIndexRow := int(math.Round(localIndexRowFloat)) //* 10000.0))
-			otherIndexRowFloat, _ := strconv.ParseFloat(rec[1], 64)
-			otherIndexRow := int(math.Round(otherIndexRowFloat)) //* 10000.0))
-
-			var localRow, otherRow []float64
-			if otherDataset == nil {
-				localRow = ReadRowNpz(localIndexRow, localData, pi.totalNbrOfRows, pi.numberOfColumns, pidColVector)
-				otherRow = ReadRowNpz(otherIndexRow, otherMatrixFile, otherProto.totalNbrOfRows, pi.numberOfColumns, otherColIndexVector)
-			} else {
-				localRow = pi.simpleData[localIndexRow-1]
-				otherRow = otherData[otherIndexRow-1]
-			}
-			// get expected kinship
-			expectedKing, xy, dist := internal.ComputeKingClear(localRow, otherRow, float64(len(localRow))/pi.scaledownLocal)
-			all_expected_dist_XY[count] = complex(xy, 0)
-			all_expected_dist[count] = complex(dist, 0)
-			expected_kings[count] = complex(expectedKing, 0)
-			if pi.reveal == 1 || pi.reveal == -1 {
-				computedKing, _ := strconv.ParseFloat(rec[2], 64)
-				degrees := rec[3:]
-				degreeComputed, _ := strconv.ParseFloat(rec[7], 64)
-				if pi.useMPC {
-					panic("MPC is not implemented")
-				}
-				king_correct := math.Abs(expectedKing-computedKing) < 0.01
-				degreeComputed = 4.0 - degreeComputed/2
-				degree_correct := true
-				expected_degree := internal.KingDegree(-4*expectedKing + 2)
-				if pi.reveal != -1 {
-					degree_correct = int(math.Round(degreeComputed)) == expected_degree
-				}
-				if !king_correct || !degree_correct {
-					if math.IsInf(expectedKing, -1) {
-						log.LLvl1("!!!! Inifity detected !!!!")
-					} else {
-						log.LLvl1("!!!! ERROR !!!!", count)
-						log.LLvl1("Expected ", expectedKing, " computed ", computedKing, " degrees ", degrees)
-						if pi.reveal == 1 {
-							log.LLvl1("computed degree: ", degreeComputed, " expected: ", expected_degree)
-						}
-					}
-				}
-			} else if pi.reveal == 0 {
-				panic("Not implemented")
-			}
-			count++
-		} else {
-			log.LLvl1("CHECKED ", count)
-			break
-		}
-
-	}
-	if pi.localTest {
-		save_array(all_expected_dist_XY, "correct_dist_XY.txt", false, true)
-		save_array(expected_kings, "correct_kings.txt", false, true)
-		save_array(all_expected_dist, "correct_dist.txt", false, true)
-	}
-
-}
-
-func (pi *ProtocolInfo) RelativeSearchProtocol(sending bool) (map[int]ResultOutput, map[int]ComparisonResultMPC) {
+func (pi *ProtocolInfo) RelativeSearchProtocol(sending bool, batchStart int, mutex *sync.Mutex) (map[int]LocalPhase1Result, map[int]ComparisonResultMPC) {
 	pid := pi.basicProt.MpcObj[0].GetPid()
 	cps := pi.basicProt.Cps
 
 	log.LLvl1(pid, ": ", time.Now(), "Finished Setup, starts Protocol")
 
-	compResults := make(map[int]ComparisonResult, 0)
+	compResults := make(map[int]KinshipResult, 0)
 	listPartiesSent := make([]int, 0) // filled when sending, based on comparisonMap
 
 	var Xlocal ComparisonDataLocal // local data used to send to other parties and do local comparisons
@@ -575,11 +390,10 @@ func (pi *ProtocolInfo) RelativeSearchProtocol(sending bool) (map[int]ResultOutp
 	if pid > 0 { // all nodes that have data
 		log.LLvl1(pid, "prepares her data") // prepare X and the vectors for sum(X^2) and rows
 		timePrepareData := time.Now()
-		if pi.reveal == 1 || pi.reveal == 3 {
+		if pi.reveal != 0 {
 			Xlocal = prepareLocalData(pid, pi.simpleData, pi.reveal, 1.0/pi.scaledownLocal)
-		} else if pi.reveal == 0 {
-			// for reveal == 0, pre-scale the het values such that no mult is needed afterwards
-			// how large is scaleDownLocal compared to pi.threshValue?
+		} else {
+			// for reveal == 0 , pre-scale the het values such that no mult is needed afterwards
 			Xlocal = prepareLocalData(pid, pi.simpleData, pi.reveal, 1.0/pi.scaledownLocal*pi.threshValue[0])
 		}
 		Xlocal.Index = pi.rowIndex
@@ -635,11 +449,12 @@ func (pi *ProtocolInfo) RelativeSearchProtocol(sending bool) (map[int]ResultOutp
 		timeCompare := time.Now()
 		// compute King & comparison
 		log.LLvl1(pid, " computes related indicator coefficients for ", otherPid)
-		var compResultsLocalTmp ComparisonResult
+		var compResultsLocalTmp KinshipResult
 		ownNetwork := pi.basicProt.MpcObj.GetNetworks()[pi.bootMap[strconv.Itoa(pid)]]
 		ownNetworkBoot := pi.basicProt.MpcObj[pi.bootMap[strconv.Itoa(pid)+boot]].Network
 
 		if !pi.useMPC {
+			log.LLvl1(pid, " has started all comparisons for pids ", pi.comparisonMap[strconv.Itoa(pid)])
 			compResultsLocalTmp = pi.computeKinshipHE(pid, ownNetworkBoot, Xlocal, Y, ownNetwork, otherPid)
 			mutexGlobal.Lock()
 			compResults[otherPid] = compResultsLocalTmp
@@ -650,17 +465,17 @@ func (pi *ProtocolInfo) RelativeSearchProtocol(sending bool) (map[int]ResultOutp
 
 		log.LLvl1(pid, ": time to compute coeff and compare Threshold: TIME: ", time.Since(timeCompare))
 	}
-	log.LLvl1(pid, " has started all comparisons for pids ", pi.comparisonMap[strconv.Itoa(pid)])
 	if pi.useMPC {
 		panic("MPC is not implemented")
 	}
 
-	log.LLvl1(pid, " finished computing ")
-	pi.basicProt.MpcObj.GetNetworks().PrintNetworkLog()
+	// mutex.Lock()
+	// pi.basicProt.MpcObj.GetNetworks().PrintNetworkLog()
+	// mutex.Unlock()
 
 	timeExchangeResults := time.Now()
 
-	allResultsToCombine := make(map[int]ResultOutput, 0)
+	allResultsToCombine := make(map[int]LocalPhase1Result, 0)
 
 	if pid > 0 && !sending {
 		// exchange comparison results
@@ -694,15 +509,15 @@ func (pi *ProtocolInfo) RelativeSearchProtocol(sending bool) (map[int]ResultOutp
 	wg.Wait()
 
 	log.LLvl1(pid, "has all results to combine ", len(allResultsToCombine), " TIME:", time.Since(timeExchangeResults))
+	mutex.Lock()
 	pi.basicProt.MpcObj.GetNetworks().PrintNetworkLog()
+	mutex.Unlock()
 
 	// 	final processing of all results
 	if pid > 0 {
 		// we can use this network to locally decrypt (for debugging)
 		// ownNetworkDec := pi.basicProt.MpcObj.GetNetworks()[pi.bootMap[strconv.Itoa(pid)+dec]]
-		if pi.reveal == -1 || pi.reveal == 1 || pi.reveal == 0 || pi.reveal == 3 {
-			return allResultsToCombine, nil
-		}
+		return allResultsToCombine, nil
 	}
 	return nil, nil
 }
@@ -1150,165 +965,28 @@ func (pi *ProtocolInfo) SignTest(cps *crypto.CryptoParams, net *mpc.Network, lef
 }
 
 // createControlledOutput computes the output according to what needs to be revealed
-func createControlledOutput(cps *crypto.CryptoParams, compResult ComparisonResult, reveal int, single bool) ResultOutput {
-	localIndexEnc, _ := crypto.EncryptFloatVector(cps, compResult.Index)
-	if reveal == -1 { // reveal everything
-		compResultCont := ResultOutput{
-			Result:              compResult.Result,
-			OtherIndexEncrypted: compResult.OtherIndexEncrypted,
-			NbrRepeat:           compResult.NbrRepeat,
-			ResultControlled:    compResult.Result, // no new info
-			IndexLocal:          localIndexEnc,     // can be also controlled, i.e., partially revealed
-		}
-		return compResultCont
-	} else if !single {
-		if reveal == 0 || reveal == 3 {
-			return ResultOutput{
-				Result: compResult.Result,
-			}
-		} else if reveal == 1 {
-			resultDegOnly := compResult.Result[1]
-			for _, v := range compResult.Result[2:] {
-				resultDegOnly = crypto.CAdd(cps, resultDegOnly, v)
-			}
-			return ResultOutput{
-				Result:              compResult.Result,
-				OtherIndexEncrypted: compResult.OtherIndexEncrypted,
-				NbrRepeat:           compResult.NbrRepeat,
-				ResultControlled:    []crypto.CipherVector{resultDegOnly},
-				IndexLocal:          localIndexEnc,
-			}
-		} else if reveal == 2 {
-			// Other potential use cases
-			panic("not implemented")
-		}
-	} else { // 1 vs n cases
-		// Other potential use cases
-		panic("not implemented")
-	}
-	return ResultOutput{}
+func createControlledOutput(cps *crypto.CryptoParams, compResult KinshipResult, reveal int, single bool) (toSend LocalPhase1Result) {
+	// should do sign tests on the result if want to reveal degree only
+	// reveal == 1 sends 4 boolean values indicating if each of the threhsold tests succeeded
+	toSend.Result = []crypto.CipherVector{compResult.Result}
+	return
 }
 
 // sendControlledOutput sends the comparison result to the other party
-func sendControlledOutput(compResult ResultOutput, otherPid int, net *mpc.Network, localTest bool, reveal int) {
-	if reveal == 1 {
-		// in a real application scenario, only this part is sent
-		net.SendInt(len(compResult.ResultControlled), otherPid)    // #vectors of results
-		net.SendInt(len(compResult.ResultControlled[0]), otherPid) // size of the vectors
-		net.SendCipherMatrix(compResult.ResultControlled, otherPid)
-
-		// if localTest {
-		net.SendInt(len(compResult.OtherIndexEncrypted), otherPid) // size of the vector
-		net.SendCipherVector(compResult.OtherIndexEncrypted, otherPid)
-
-		net.SendInt(len(compResult.IndexLocal), otherPid) // size of the vector
-		net.SendCipherVector(compResult.IndexLocal, otherPid)
-
-		// this is for debugging
-		net.SendInt(len(compResult.Result), otherPid)    // #vectors of results
-		net.SendInt(len(compResult.Result[0]), otherPid) // size of the vectors
-		net.SendCipherMatrix(compResult.Result, otherPid)
-
-		net.SendInt(compResult.NbrRepeat, otherPid)
-	} else if reveal == 0 || reveal == 3 {
-		net.SendInt(len(compResult.Result[0]), otherPid) // size of the vector
-		net.SendCipherVector(compResult.Result[0], otherPid)
-	}
-	// }
+func sendControlledOutput(compResult LocalPhase1Result, otherPid int, net *mpc.Network, localTest bool, reveal int) {
+	net.SendInt(len(compResult.Result[0]), otherPid) // size of the vector
+	net.SendCipherVector(compResult.Result[0], otherPid)
 }
 
-func receiveControlledOutput(cps *crypto.CryptoParams, otherPid int, net *mpc.Network, localTest bool, reveal int) ResultOutput {
-	receivedContResult := ResultOutput{}
-	if reveal == 1 {
-		// in a real application scenario, only this part is sent
-		nbrContResults := net.ReceiveInt(otherPid)  // #vectors of results
-		sizeContResults := net.ReceiveInt(otherPid) // size of the vectors
-		receivedContResult.ResultControlled = net.ReceiveCipherMatrix(cps, nbrContResults, sizeContResults, otherPid)
-
-		// if localTest {
-		sizeIndexCont := net.ReceiveInt(otherPid)
-		receivedContResult.IndexLocal = net.ReceiveCipherVector(cps, sizeIndexCont, otherPid)
-
-		sizeOtherIndex := net.ReceiveInt(otherPid)
-		receivedContResult.OtherIndexEncrypted = net.ReceiveCipherVector(cps, sizeOtherIndex, otherPid)
-
-		// this part is for debugging mostly or to get statistics
-		nbrResults := net.ReceiveInt(otherPid)  // #vectors of results
-		sizeResults := net.ReceiveInt(otherPid) // size of the vectors
-		receivedContResult.Result = net.ReceiveCipherMatrix(cps, nbrResults, sizeResults, otherPid)
-
-		receivedContResult.NbrRepeat = net.ReceiveInt(otherPid)
-		// }
-	} else if reveal == 0 || reveal == 3 {
-		sizeVec := net.ReceiveInt(otherPid)
-		receivedContResult.Result = []crypto.CipherVector{net.ReceiveCipherVector(cps, sizeVec, otherPid)}
-	}
+func receiveControlledOutput(cps *crypto.CryptoParams, otherPid int, net *mpc.Network, localTest bool, reveal int) (receivedContResult LocalPhase1Result) {
+	sizeVec := net.ReceiveInt(otherPid)
+	receivedContResult.Result = []crypto.CipherVector{net.ReceiveCipherVector(cps, sizeVec, otherPid)}
 	return receivedContResult
 }
 
 func (pi *ProtocolInfo) decryptVectorForDebugging(cps *crypto.CryptoParams, ct crypto.CipherVector, pid int) []complex128 {
 	network := pi.basicProt.MpcObj.GetNetworks()[pi.bootMap[strconv.Itoa(pid)+dec]]
-	return crypto.DecodeFloatVector2(cps, network.CollectiveDecryptVec(cps, ct, pid))
-}
-
-func postProcessCompResult(cps *crypto.CryptoParams, contResult ResultOutput, ownNetwork *mpc.Network,
-	pid int, localTest bool) ResultOutputDec {
-	decResult := ResultOutputDec{}
-
-	var decResultRaw [][]float64
-	var decIndexControlled, otherIndex []float64
-	decResultCont := make([][]float64, len(contResult.ResultControlled))
-	for r, v := range contResult.ResultControlled {
-		log.LLvl1(v[0].Level(), v[0].Scale(), len(v))
-		decResultCont[r] = crypto.DecodeFloatVector(cps, ownNetwork.CollectiveDecryptVec(cps, v, pid))
-	}
-	decIndexControlled = crypto.DecodeFloatVector(cps, ownNetwork.CollectiveDecryptVec(cps, contResult.IndexLocal, pid))
-	otherIndex = crypto.DecodeFloatVector(cps, ownNetwork.CollectiveDecryptVec(cps, contResult.OtherIndexEncrypted, pid))
-
-	decResultRaw = make([][]float64, len(contResult.Result))
-	for r, v := range contResult.Result {
-		decResultRaw[r] = crypto.DecodeFloatVector(cps, ownNetwork.CollectiveDecryptVec(cps, v, pid))
-	}
-	decResult = ResultOutputDec{
-		Result:              decResultRaw,
-		OtherIndexEncrypted: otherIndex,
-		NbrRepeat:           contResult.NbrRepeat,
-		ResultControlled:    decResultCont,
-		IndexControlled:     decIndexControlled,
-	}
-
-	return decResult
-}
-
-func postProcessCompResultMPC(contResult ComparisonResultMPC, mpcObj mpc.ParallelMPC, net int, pid int, localTest bool) ResultOutputDec {
-	decResult := ResultOutputDec{}
-
-	var decIndexControlled, otherIndex []float64
-	decResultRaw := make([][]float64, len(contResult.Result))
-	for r, v := range contResult.Result {
-		vRevealed := mpcObj[net].RevealSymVec(v)
-		decResultRaw[r] = vRevealed.ToFloat(mpcObj[0].GetFracBits())
-	}
-	decResultCont := make([][]float64, len(contResult.ResultControlled))
-	for r, v := range contResult.ResultControlled {
-		vRevealed := mpcObj[net].RevealSymVec(v)
-		decResultCont[r] = vRevealed.ToFloat(mpcObj[0].GetFracBits())
-	}
-
-	indexRevealed := mpcObj[net].RevealSymVec(contResult.Index)
-	decIndexControlled = indexRevealed.ToFloat(mpcObj[0].GetFracBits())
-	otherIndexRevealed := mpcObj[net].RevealSymVec(contResult.OtherIndex)
-	otherIndex = otherIndexRevealed.ToFloat(mpcObj[0].GetFracBits())
-
-	decResult = ResultOutputDec{
-		Result:              decResultRaw,
-		OtherIndexEncrypted: otherIndex,
-		NbrRepeat:           contResult.NbrRepeat,
-		ResultControlled:    decResultCont,
-		IndexControlled:     decIndexControlled,
-	}
-
-	return decResult
+	return crypto.DecodeFloatVector2(cps, network.CollectiveDecryptVec(cps, ct, pid))[0]
 }
 
 func prepareXVectors(X ComparisonDataLocal, bucketSize, nbrBuckets int, scaleDown float64) ([]float64, []float64, []float64, []float64) {

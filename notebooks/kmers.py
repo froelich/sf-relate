@@ -40,6 +40,7 @@ class HaplotypeArray:
 
     @staticmethod
     def read_cM(conf, chr_range, plot=False):
+        from matplotlib import pyplot as plt
         cMs = [None] * chr_range.start
         if plot:
             raise NotImplementedError("debug mode is disabled")
@@ -56,13 +57,12 @@ class HaplotypeArray:
 
     @staticmethod
     def read_gmap(conf, chr_id):
-        ver = conf['ver']
-        gmap_fname = f'data/maps/chr{chr_id}.b{ver}.gmap.gz'
+        gmap_fname = f'{conf["gmap_dir"]}/chr{chr_id}.gmap.gz'
         return pd.read_csv(gmap_fname, sep="\t")
 
     @staticmethod
     def read_pos(conf, chr_id):
-        pos = np.loadtxt(f"{conf['test_dir']}/pos/0.01/chr{chr_id}.txt")
+        pos = np.loadtxt(f"{conf['pos_dir']}/chr{chr_id}.txt")
         return pos
 
     @staticmethod
@@ -92,16 +92,13 @@ class HaplotypeArray:
             return a[:, self.beg:self.end]
 
     def read_mafs(self):
-        maf_fname = f"{self.conf['test_dir']}../maf/{self.conf['maf_LB']:.2f}/chr{self.chr_id}.txt"
+        maf_fname = f"{self.conf['maf_dir']}/chr{self.chr_id}.txt"
         maf = pd.read_csv(maf_fname, sep=" ", header=None).to_numpy().flatten()
         return self.get_seg(maf)
 
     def read_haps(self):
-        npy_path = self.conf['test_dir']
-        if self.permuted:
-            npy_file = f"{npy_path}/haps/chr{self.chr_id}_maf0.01_p.npy" 
-        else:
-            npy_file = f"{npy_path}/haps/chr{self.chr_id}_maf0.01.npy" 
+        npy_path = self.conf['hap_dir']
+        npy_file = f"{npy_path}/chr{self.chr_id}.npy" 
         x = np.load(npy_file, mmap_mode='r')
         return self.get_seg(x)
     
@@ -206,54 +203,3 @@ class KmerBuilder:
             return apply_uhash(data_set, hash_mode, k, inc, rand_seed, h_key)
         else:
             return apply_uhash(data_set, hash_mode, k, inc, rand_seed, -1)
-
-            
-# the following are for unit-testing this class
-def find_kmers(conf, chr_range, seg_range, modes, get_str=False):
-    cMs = HaplotypeArray.read_cM(conf, chr_range)
-    k = 2
-    idx = [[] for _ in range(23)]
-    for chrom in chr_range:
-        for seg_id in seg_range:
-            init_conf(conf, conf['n'], n)
-            print(f'chrom {chrom} seg {seg_id}', end=' ')
-            conf_party = conf.copy()
-            conf_party['test_dir'] += f'party{0}/'
-            builder = KmerBuilder(conf_party)
-            haps = HaplotypeArray(conf_party, chrom, seg_id, cMs[chrom])
-            maf = haps.read_mafs()
-            cM_begin = seg_id * conf['step_cM'] 
-            filt = builder.sample_indices(maf, haps.get_cM(), cM_begin)
-            idx[chrom].append(filt)
-
-    sums = [[] for seg_id in seg_range for chrom in range(23)]
-    sums_hash = [[] for seg_id in seg_range for chrom in range(23)]
-    for chrom in chr_range:
-        for seg_id in seg_range:
-            GG = []
-            LL = []
-            for i in range(k):
-                conf_party = conf.copy()
-                conf_party['test_dir'] += f'party{i}/'
-                builder = KmerBuilder(conf_party)
-                haps = HaplotypeArray(conf_party, chrom, seg_id, cMs[chrom])
-                kmers_hash = builder.get_kmers(haps, indices=idx[chrom][seg_id])
-                if get_str:
-                    kmers = builder.get_kmers(haps, indices=idx[chrom][seg_id], debug=True)
-                    GG.append(kmers)
-                LL.append(kmers_hash)
-            sums[chrom].append(GG)
-            sums_hash[chrom].append(LL)
-    return sums_hash, sums 
-
-if __name__ == '__main__':
-    # read in some haplotypes
-    from user_config import conf
-    n = 100
-    seg_range = range(0, 2)
-    chr_range = range(1, 2)
-
-    conf['test_dir'] = 'data/2party_{}/'
-    conf['mode'] = 4
-    init_conf(conf, n)
-    L0, L1 = find_kmers(conf, chr_range, seg_range, [1, 3, 4], get_str=False)

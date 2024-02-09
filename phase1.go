@@ -13,27 +13,16 @@ import (
 )
 
 func (pi *ProtocolInfo) computeKinshipHE(sourcePid int, net *mpc.Network, X ComparisonDataLocal,
-	Y ComparisonDataOther, netMat *mpc.Network, otherPid int) ComparisonResult {
+	Y ComparisonDataOther, netMat *mpc.Network, otherPid int) KinshipResult {
 
 	cps := pi.basicProt.Cps
 	xRows, xCols := X.X.Dims()
 
 	// Prepare comparison result
 	var distance crypto.CipherVector
-	if pi.single { // YSquare is prepared to match matrix mult result
-		panic("1 vs n case is not implemented")
-	} else {
-		distance, _ = lib.InitEncryptedVector(cps, xRows*pi.bucketSize, float64(cps.Params.Qi()[cps.Params.Levels()-1])) //*cps.Params.Scale())
-	}
-
-	XCompResult := ComparisonResult{}
-
-	// parallelization
-	wg := sync.WaitGroup{}
-	var mutex sync.Mutex
+	distance, _ = lib.InitEncryptedVector(cps, xRows*pi.bucketSize, float64(cps.Params.Qi()[cps.Params.Levels()-1])) //*cps.Params.Scale())
 
 	var hetXRepeatCol, hetXInvRepeatCol, XSquareElemRepeatCol []float64
-	var indexXRepeatCol []float64
 	var hetYRep, hetYInvRep crypto.CipherVector
 	var YSquareRep crypto.CipherVector
 
@@ -46,19 +35,18 @@ func (pi *ProtocolInfo) computeKinshipHE(sourcePid int, net *mpc.Network, X Comp
 	log.LLvl1("Y has to be repeated ", nbrRepeatY, " more times")
 	log.LLvl1("Each vector has ", vectorSize)
 	log.LLvl1("Number of buckets ", nbrBuckets)
-	XCompResult.NbrRepeat = Y.Repeated * nbrRepeatY
 
 	log.LLvl1(sourcePid, " prepare local data ")
 	timePrepareX := time.Now()
-	hetXRepeatCol, hetXInvRepeatCol, XSquareElemRepeatCol, indexXRepeatCol = prepareXVectors(X, pi.bucketSize, nbrBuckets, pi.scaleDown)
+	hetXRepeatCol, hetXInvRepeatCol, XSquareElemRepeatCol, _ = prepareXVectors(X, pi.bucketSize, nbrBuckets, pi.scaleDown)
 	hetXInvRepeatCol = gwas.ScaleF(hetXInvRepeatCol, -1.0)
-	XCompResult.Index = indexXRepeatCol
 
 	log.LLvl1(sourcePid, " prepared local data, TIME:", time.Since(timePrepareX))
 
 	log.LLvl1(sourcePid, " prepare other node data ")
 	timePrepareY := time.Now()
-	YSquareRep, hetYRep, hetYInvRep, XCompResult.OtherIndexEncrypted = prepareYVectors(Y, nbrRepeatY)
+	// check if hetYInvRep is correctly scaled
+	YSquareRep, hetYRep, hetYInvRep, _ = prepareYVectors(Y, nbrRepeatY)
 	log.LLvl1(sourcePid, " prepared other node data, TIME:", time.Since(timePrepareY))
 
 	log.LLvl1(sourcePid, " computes XY ")
@@ -93,17 +81,33 @@ func (pi *ProtocolInfo) computeKinshipHE(sourcePid int, net *mpc.Network, X Comp
 	hetXRepEncode, _ := crypto.EncodeFloatVector(cps, hetXRepeatCol)
 	hetXInvRepEncode, _ := crypto.EncodeFloatVector(cps, hetXInvRepeatCol)
 
+	log.LLvl1("Sign testing ... ")
+	numIter := 3
+
+	XCompResult := computeSignTestResults(pi, net, hetXRepEncode, distance, xRows, sourcePid, numIter, hetYRep, hetYInvRep, hetXInvRepEncode)
+	pi.basicProt.MpcObj.GetNetworks().PrintNetworkLog()
+
+	return XCompResult
+}
+
+func computeSignTestResults(pi *ProtocolInfo, net *mpc.Network, hetXRepEncode crypto.PlainVector, distance crypto.CipherVector, xRows int, sourcePid int, numIter int, hetYRep crypto.CipherVector, hetYInvRep crypto.CipherVector, hetXInvRepEncode crypto.PlainVector) (XCompResult KinshipResult) {
+	cps := pi.basicProt.Cps
+	// compare with the
 	mask := make([]float64, cps.Params.Slots()*len(hetYRep))
 	for i := xRows * pi.bucketSize; i < cps.Params.Slots(); i++ {
 		mask[i] = 1.0 / pi.scaledownLocal
 	}
 	maskEncoded, _ := crypto.EncodeFloatVectorWithScale(cps, mask, float64(cps.Params.Qi()[distance[0].Level()-1]))
+	// append this comparison result
+	// the list of kinship thresholds to be compared is pi.threshValue for reveal == 1
+	// and [4 - 0.01 * i for i in range(1, 101)] for reveal == 2
+	// to be multiplied on the left
+	// append the raw kinship computed in reveal == 3
+	wg := sync.WaitGroup{}
+	var mutex sync.Mutex
 
 	if pi.reveal == 0 {
 		// only do two sign tests and multiply them together
-		log.LLvl1("Sign testing ... ")
-		numIter := 3
-
 		var rstHetX, rstHetY crypto.CipherVector
 		wg.Add(2)
 		for i := 0; i < 2; i++ {
@@ -118,27 +122,61 @@ func (pi *ProtocolInfo) computeKinshipHE(sourcePid int, net *mpc.Network, X Comp
 		}
 		wg.Wait()
 
-		// Mult => AND
 		rst := crypto.CMult(cps, rstHetX, rstHetY)
 		rst = crypto.CRescale(cps, rst)
-		// decrypt for debugging
-		// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-		// * * * * * * * Maybe should reduce ciphertext size to the lowest level possible?
 		rst = crypto.DropLevelVec(cps, rst, 2)
-		// need to rescale
 		rst = crypto.CRescale(cps, rst)
-		XCompResult.Result = []crypto.CipherVector{rst}
-		pi.basicProt.MpcObj.GetNetworks().PrintNetworkLog()
-	} else if pi.reveal == 1 {
-		// originally have a mode of computing degrees based on thresholds using sign tests, but is removed
-		panic("this mode is removed and no longer supported")
-	} else if pi.reveal == 3 {
+
+		XCompResult.Result = append(XCompResult.Result, rst[0])
+	} else if pi.reveal == 1 || pi.reveal == 2 || pi.reveal == 3 {
 		signDiffHet := pi.SignTest(cps, net, nil, hetXRepEncode, hetYRep, &mutex, maskEncoded, sourcePid, pi.approxInt, -1, 0, 20)
+		// need to confirm the Levels here
 		signDiffHet = PostprcoessSignTest(cps, signDiffHet, true)
 		maxOfInvHet := computeMinimum(cps, signDiffHet, hetYInvRep, hetXInvRepEncode)
 		kinshipCoeffs := crypto.CMult(cps, maxOfInvHet, distance)
-		XCompResult.Result = []crypto.CipherVector{kinshipCoeffs}
-	}
+		kinshipCoeffs = crypto.CRescale(cps, kinshipCoeffs)
 
-	return XCompResult
+		if pi.reveal == 1 || pi.reveal == 2 {
+			var kinshipThres []float64
+			if pi.reveal == 1 {
+				kinshipThres = pi.threshValue
+			} else if pi.reveal == 2 {
+				kinshipThres = pi.discretizedThresh
+			}
+
+			numOutputs := len(kinshipThres)
+			XCompResult.Result = make(crypto.CipherVector, numOutputs)
+			for j := 0; j < numOutputs; j++ {
+				wg.Add(1)
+				go func(idx int) {
+					compLeft := make([]float64, pi.batchLength)
+					for i := 0; i < pi.batchLength; i++ {
+						compLeft[i] = kinshipThres[idx]
+					}
+					leftEncode, _ := crypto.EncodeFloatVector(cps, compLeft)
+
+					// bootstrap before sign test
+					for i := 0; i < len(kinshipCoeffs); i++ {
+						mutex.Lock()
+						net.CollectiveBootstrap(cps, kinshipCoeffs[i], sourcePid)
+						mutex.Unlock()
+					}
+					rst := pi.signTestComposed(cps, net, nil, leftEncode, kinshipCoeffs, &mutex, maskEncoded, sourcePid, 3, numIter)
+
+					// should drop level before exchanging
+					rst = crypto.DropLevelVec(cps, rst, 2)
+					rst = crypto.CRescale(cps, rst)
+					XCompResult.Result[idx] = rst[0]
+					wg.Done()
+				}(j)
+			}
+			wg.Wait()
+		} else if pi.reveal == 3 {
+			// reveal the raw kinship coefficients
+			XCompResult.Result = append(XCompResult.Result, kinshipCoeffs[0])
+		}
+	} else {
+		panic("reveal mode not supported")
+	}
+	return
 }
