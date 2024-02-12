@@ -183,8 +183,7 @@ func (pi *ProtocolInfo) accumulateByID(allResultsToCombine map[int]crypto.Cipher
 		// print out the block result here
 		if pi.reveal == 0 {
 			save_decryption(pi, strconv.Itoa(name), obid, pid, oend, idToCheck, obegin, decrypted)
-		}
-		if pi.reveal == 1 {
+		} else if pi.reveal == 1 {
 			save_decryption(pi, "degree"+strconv.Itoa(name), obid, pid, oend, idToCheck, obegin, decrypted)
 		} else if pi.reveal == 2 {
 			save_decryption(pi, "kinship"+strconv.Itoa(name), obid, pid, oend, idToCheck, obegin, decrypted)
