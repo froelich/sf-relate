@@ -198,7 +198,7 @@ func (pi *ProtocolInfo) accumulateByID(allResultsToCombine map[int]crypto.Cipher
 
 func save_decryption(pi *ProtocolInfo, name string, obid int, pid int, oend int, idToCheck []int, obegin int, decrypted []complex128) {
 	log.LLvl1("saving ", obid, "block")
-	folder := os.Getenv("FOLDER")
+	folder := os.Getenv("OUT_FOLDER")
 	filename := folder + name + "_" + strconv.Itoa(obid) + "_party" + strconv.Itoa(pid) + ".csv"
 	csvOut, _ := os.Create(filename)
 	writer := csv.NewWriter(csvOut)
