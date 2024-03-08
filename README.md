@@ -37,7 +37,6 @@ finishes without any output, the package has been successfully configured.
 Finally, to build the go executable, run
 ```
 /usr/local/go/bin/go test -c -o goParty
-<!-- | tee /dev/tty > $FOLDER/logs/Y/test.txt -->
 go test -c -o foo
 ```
 
@@ -89,7 +88,6 @@ They do it locally because this step handles sensitive data.
 python3 step1_hashing.py -PARTY $i -FOLDER $FOLDER
 ```
 For party `i`, the list of buckets used in [step 2](#step-2-mhe) are stored as `{hash_table_dir}/ID_table.npz`.
-<!-- Explain what OUT means -->
 
 #### Step 2: MHE
 Step 2 performs the kinship evaluation and accumulation under encryption over networks.
@@ -130,10 +128,6 @@ export FOLDER="config/$t/"
 
 ### Local Parameters (`configLocal.Party[0-2].toml`)
 ```toml
-<!-- simple_data_path = "notebooks/trial/party1/geno/all_chrs.bin" -->
-<!-- row_index_file= "notebooks/trial/party1/table/ID_table.npz" -->
-<!-- column_index_file="notebooks/trial/sketched/SNPs.npz" -->
-
 PARA = 1 # Number of parallel processes to use. Set to 20 for the UKB dataset with 100K individual * 90K SNPs on the Google Cloud machine with 128 cores and 576GB memory. Should be set as large as possible to utilize all CPUs and memory. Exact value depends on the machine and dataset sizes. Users can provide reasonable parameters like 5 and retry with a smaller one if it fails due to memory constraints.
 
 # input directories
@@ -147,13 +141,10 @@ sketched_snps_dir = "notebooks/trial/sketched/" ## share this with the other par
 shared_param_dir = "notebooks/trial/params/" ## share this with the other party
 hash_table_dir = "notebooks/trial/party1/table/" ## local hash table directory
 ```
-<!-- Also note that the number `M` is the number of SNPs on which the KING kinship estimator (see [Manichaikul et al.](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC3025716/)) is computed.  -->
 
 ### Global Experimental Parameters (`configGlobal.toml`)
 #### Configuring [step 0: Sampling shared randomness](#step-0-sampling-shared-randomness)
 This step samples shared hashing parameters and sketching parameters, respectively. 
-<!-- There are two scripts for this step: -->
-<!-- It takes in the following parameters: -->
 ```toml
 # =================== EXPERIMENT CONFIGURATIONS ==================
 
@@ -175,9 +166,6 @@ maxL = 6 # max number of repetitive hashing; increase and retry if table saturat
 s = 0.7 # subsampling rate (i.e. num(outputSNPs)/num(SNPs in .pvar))
 ```
 #### Configuring [step 1: hashing](#step-1-hashing)
-  <!-- -hap HAP      directory to the haplotype files, named chr$i.npy for i=1..22.
-                Haplotypes are stored as a 2D numpy integer matrix of dim 2n *
-                M, with different integers treated as different SNPs. -->
 ```toml
 ## ======================== STEP 1 ===============================
 L = 3 # number of repetitive hashing; increase and retry if table saturation is low; if not enough repetition hash keys are sampled in step0 (default number of keys is maxL=6), redo step0 with a larger maxL.
@@ -185,15 +173,9 @@ L = 3 # number of repetitive hashing; increase and retry if table saturation is 
 Note that logs which include information about the table saturation is printed to `stdout`. 
 The other parameters (`L`) need to be adjusted according to the local statistics (e.g. parties with a smaller number of individuals might need a larger `L` to saturate the local table).
 
-<!-- ### Configurations for [Step 2: MHE](#step-2-mhe) -->
-<!-- *The current implementation for step2 assumes the two parties have the same number of individuals.* -->
-<!-- Users should modify them on their customized datasets. -->
 #### Configuring [step 2: MHE](#step-2-mhe)
 ```toml
 ## ======================== STEP 2 ===============================
-<!-- N = 1601
-M = 145181 # total number of SNPs in the full panel -->
-
 # select output modes
 reveal = 0
 # reveal = 1
