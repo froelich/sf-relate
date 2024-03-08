@@ -16,20 +16,18 @@ import (
 	"testing"
 	"time"
 
-	"github.com/hhcho/sfgwas/crypto"
 	"go.dedis.ch/onet/v3/log"
 )
 
 var pid, _ = strconv.Atoi(os.Getenv("PID"))
 var folder = os.Getenv("FOLDER")
-var paraRun, _ = strconv.Atoi(os.Getenv("PARA"))
+var paraRun int
 
 func (pi *ProtocolInfo) inferParams(hard_reset bool) {
 	// if pid > 0 {
 	if !hard_reset {
 		rowIndexVector, colIndexVector := internal.ReadNPZVectors(pi.rowIndexFile, pi.columnIndexFile)
 		if pi.numberOfColumns <= 0 {
-			// numberOfColumns is the total number of Columns(?)
 			pi.numberOfColumns = pi.M
 		}
 		log.LLvl1("Scale down factor: ", pi.scaleDown)
@@ -46,7 +44,9 @@ func (pi *ProtocolInfo) inferParams(hard_reset bool) {
 		if pi.scaledownLocal <= 1e-6 {
 			pi.scaledownLocal = float64(pi.numberOfColumnsTest) / (10.0)
 		}
+		// TODO: check which scaling makes more sense if number of columns is small
 		pi.scaleDown = 1.0
+		// pi.scaleDown = pi.scaledownLocal
 		// assert that numberOfColumns >= numberOfColumnsTest
 		if pi.numberOfColumns < pi.numberOfColumnsTest {
 			log.Fatal("numberOfColumns < numberOfColumnsTest")
@@ -73,18 +73,12 @@ func TestRelativeSearchProtocol(t *testing.T) {
 	prot := InitializeRelativeMatchingProtocol(pid, configFolder, nil)
 	prot.inferParams(false)
 	reportStats(timeTotal, prot, "init protocol:")
+	paraRun = prot.PARA
 
 	if prot.TestSignTest == 0 {
 		// test the main setting of the protocol
 		globalResult := runPhase1withTime(prot, configFolder)
 		if pid > 0 {
-			timeTotal = time.Now()
-			runPhase2WithTime(prot, globalResult)
-		}
-	} else if prot.TestSignTest == 1 {
-		cps := prot.basicProt.Cps
-		globalResult := runFakePhase1withTime(prot, cps)
-		if pid > 0 && prot.reveal == 2 {
 			runPhase2WithTime(prot, globalResult)
 		}
 	} else {
@@ -102,14 +96,6 @@ func runPhase1withTime(prot *ProtocolInfo, configFolder string) GlobalPhase1Resu
 	return globalResult
 }
 
-func runFakePhase1withTime(prot *ProtocolInfo, cps *crypto.CryptoParams) GlobalPhase1Result {
-	timeStart := time.Now()
-	reportStats(timeStart, prot, " start encrypting 0 in a fakse phase 1: ")
-	globalResult := makeFloatVecForAccuTest(prot, cps, pid)
-	reportStats(timeStart, prot, " finish encrypting 0 in a fakse phase 1: ")
-	return globalResult
-}
-
 func runPhase2WithTime(prot *ProtocolInfo, globalResult GlobalPhase1Result) {
 	timeStart := time.Now()
 	reportStats(timeStart, prot, " start phase 2 of MHE : ")
@@ -119,62 +105,13 @@ func runPhase2WithTime(prot *ProtocolInfo, globalResult GlobalPhase1Result) {
 		for i := 0; i < len(globalResult.Result); i++ {
 			prot.accumulateByID(globalResult.Result[i], pid, i)
 		}
-	} else if prot.reveal == 3 {
-		// nothing to do since already saved decryption at the end of phase 1
 	}
 	reportStats(timeStart, prot, " perform accumulation (phase 2) protocol: ")
-}
-
-func terminateAndRestartProtocol(prot *ProtocolInfo, configFolder string) *ProtocolInfo {
-	log.LLvl1("closing")
-	prot.SyncAndTerminate(true)
-	prot = InitializeRelativeMatchingProtocol(pid, configFolder, nil)
-	prot.inferParams(false)
-	return prot
 }
 
 func reportStats(timeStart time.Time, prot *ProtocolInfo, part_name string) {
 	log.LLvl1(timeStart, "========= time at "+part_name, time.Since(timeStart))
 	prot.basicProt.MpcObj.GetNetworks().PrintNetworkLog()
-}
-
-func makeFloatVecForAccuTest(prot *ProtocolInfo, cps *crypto.CryptoParams, pid int) (dummy GlobalPhase1Result) {
-	// make encryptions of 0 to test accumuluation (MHE-Phase 2)'s running time only
-	if pid > 0 && !prot.useMPC {
-		prot.alwaysDecrypting()
-		prot.alwaysBootstrapping()
-	}
-	partitionSize := int(math.Ceil((float64(prot.totalNbrOfRowsTest)/float64(paraRun))/float64(prot.batchLength))) * prot.batchLength
-	last_start := prot.startKey
-	var globalResult GlobalPhase1Result
-	globalResult.Result = make([]BatchedCVec, 0)
-	for k := 0; k < 4; k++ {
-		for exec := 0; exec < paraRun; exec++ {
-			newEndKey := last_start + partitionSize
-			if newEndKey > prot.startKey+prot.totalNbrOfRowsTest {
-				newEndKey = prot.startKey + prot.totalNbrOfRowsTest
-			}
-			var localResult LocalPhase1Result
-			localResult.Result = make([]crypto.CipherVector, 0)
-			numBlocks := int(math.Ceil(float64(newEndKey-last_start) / float64(prot.batchLength)))
-			for i := 0; i < numBlocks; i++ {
-				// manually create kinship values for later accumulations
-				val := make([]float64, prot.batchLength)
-				for j := 0; j < prot.batchLength; j++ {
-					if j%10 != 0 && k >= 2 {
-						val[j] = 0.0
-					} else {
-						val[j] = 1.0
-					}
-				}
-				vec, _ := crypto.EncryptFloatVector(cps, val)
-				localResult.Result = append(localResult.Result, crypto.DropLevelVec(cps, vec, 2))
-			}
-			globalResult.Result[k][exec] = localResult.Result[k]
-			last_start += partitionSize
-		}
-	}
-	return globalResult
 }
 
 func startProtocols(prot *ProtocolInfo, configFolder string) (globalResult GlobalPhase1Result) {
@@ -243,6 +180,7 @@ func startProtocols(prot *ProtocolInfo, configFolder string) (globalResult Globa
 				rowIndexFile:        prot.rowIndexFile,
 				columnIndexFile:     prot.columnIndexFile,
 				batchLength:         prot.batchLength,
+				outFolder:           prot.outFolder,
 				queryLength:         prot.queryLength,
 				localTest:           prot.localTest,
 				useMPC:              prot.useMPC,

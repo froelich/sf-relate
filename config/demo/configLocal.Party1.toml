@@ -1,9 +1,21 @@
-# This is the directory the binary genotype 
-# file of all individuals. Each genotype is 
-# encoded as a byte in individual-major order.
-# So there are a total of n * M bytes.
-simple_data_path = "notebooks/trial/party1/geno/all_chrs.bin"
-# this is the output by the Python step1 script
-row_index_file= "notebooks/trial/party1/table/ID_table.npz"
-# this is the output by the Python step0b script.
-column_index_file="notebooks/trial/sketched/SNPs.npz"
+# <!-- simple_data_path = "notebooks/trial/party1/geno/all_chrs.bin" -->
+# <!-- row_index_file= "notebooks/trial/party1/table/ID_table.npz" -->
+# <!-- column_index_file="notebooks/trial/sketched/SNPs.npz" -->
+
+PARA = 1 # Number of parallel processes to use. Set to 20 for the UKB dataset with 100K individual * 90K SNPs on the Google Cloud machine with 128 cores and 576GB memory. Should be set as large as possible to utilize all CPUs and memory. Exact value depends on the machine and dataset sizes. Users can provide reasonable parameters like 5 and retry with a smaller one if it fails due to memory constraints.
+
+# input directories
+haps_dir = "notebooks/data/demo/party1/haps/" # containing all_chrs.[pgen|pvar|psam]
+snp_list = "notebooks/data/demo/snpsForKING.txt"
+gmap_dir = "notebooks/data/demo/gmap/" # containing chr[1-22].gmap.gz
+maf_dir = "notebooks/data/demo/maf/" # containing chr[1-22].maf.gz
+
+# where to cache intermediate files
+pos_dir = "notebooks/data/demo/pos/" # containing chr[1-22]_pos.txt
+geno_dir = "notebooks/data/demo/party1/geno/" # genotypes (reconstructed from haplotypes in haps_dir)
+sketched_snps_dir = "notebooks/data/demo/sketched/" ## share this with the other party
+shared_param_dir = "notebooks/data/demo/params/" ## share this with the other party
+hash_table_dir = "notebooks/data/demo/party1/table/" ## local hash table directory
+
+
+#output directory is the same as the config directory

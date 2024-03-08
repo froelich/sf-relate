@@ -1,6 +1,6 @@
 # Keep a smaller set of variants
-## remove rare variants 
-./plink2 -pfile vzs all_hg38 --mind 0.1 --geno 0.1 --maf 0.01 --max-maf 0.99 --chr 1-22  --min-alleles 2 --max-alleles 2 --make-pgen vzs --out maf_0.01_all_hg
+# remove rare variants 
+./plink2 -pfile vzs all_hg38 --mind 0.1 --geno 0.1 --maf 0.01 --max-maf 0.99 --chr 1-22  --min-alleles 2 --max-alleles 2 --make-pgen vzs --out maf_0.01_all_hg --allow-extra-chr
 ## thin data
 ./plink2 -pfile vzs maf_0.01_all_hg --thin-count 1000000 --make-pgen vzs --out thinned
 ## exclude HLD region

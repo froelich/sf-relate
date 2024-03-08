@@ -7,6 +7,8 @@ import concurrent
 import concurrent.futures
 from default_config import conf
 import ctypes
+import tomlkit
+import os
 import pickle
 
 info = mp.get_logger().info
@@ -243,25 +245,40 @@ def load_conf(param_dir):
     return conff
 
 if __name__ == '__main__':
-    # the actual test
-    parser=argparse.ArgumentParser(description=
-                                   '''Python script to build local hash tables.
+    parser = argparse.ArgumentParser(description='Build Local Hash Table')
+    parser.add_argument('-PARTY', type=int, help='party id', required=True)
+    parser.add_argument('-FOLDER', type=str, help='path to the configuration folder', required=True)
+    args = parser.parse_args()
+    party_id = args.PARTY
+    FOLDER = args.FOLDER
 
-                                   Please make sure the parameters are the same on the two parties
-                                   ''')
-    parser.add_argument('-n', type=int, help='number of individuals in the local dataset (i.e. the haplotype file is of dim 2n * M)', required=True)
-    parser.add_argument('-param', type=str, help='directory to the shared params output by step0a.', required=True)
-    parser.add_argument('-hap', type=str, help='directory to the haplotype files, named chr$i.npy for i=1..22. Haplotypes are stored as a 2D numpy integer matrix of dim 2n * M, with different integers treated as different SNPs.', required=True)
-    parser.add_argument('-L', type=int, help='number of repetitive hashing; increase and retry if table saturation is low; if not enough repetition hash keys are sampled in step0a (default maxL=6), redo step0a with a larger maxL.', default=3)
-    # parser.add_argument('-pos', type=str, help='directory storing the bp positions. Files are named chr{i}.txt for i = 1..22', required=True)
-    # parser.add_argument('-gmap', type=str, help='directory storing the genetic maps. Files are named chr{i}.gmap.gz (in gz format) for i = 1..22', required=True)
-    # parser.add_argument('-maf', type=str, help='directory storing the maf files. Files are named chr{i}.txt for i = 1..22', required=True)
-    # parser.add_argument('-enclen', type=int, help='number of snps in each encoded split haplotype segment', required=True)
-    parser.add_argument('-out', type=str, help='output table directory', required=True)
-    namespace = parser.parse_args()
+    args_local = tomlkit.load(open(f"{FOLDER}/configLocal.Party{party_id}.toml"))
+    args_global = tomlkit.load(open(f"{FOLDER}/configGlobal.toml"))
+    args_local['param'] = args_local['shared_param_dir']
+    args_local['out'] = args_local['hash_table_dir']
+    args_local['hap'] = args_local['haps_dir']
+    args_local['pos'] = args_local['pos_dir']
+    args_local['gmap'] = args_local['gmap_dir']
+    args_local['pos'] = args_local['pos_dir']
+    args_local['maf'] = args_local['maf_dir']
+    namespace = argparse.Namespace()
+    namespace.__dict__.update(args_global)
+    namespace.__dict__.update(args_local)
+    # find out which line in pvar_file start with #CHROM
+    psam, snps, pvar = read_pgen_metadata(args_local)
+    n, M, m = len(psam), len(snps), len(pvar)
+    namespace.__dict__.update({'n': n, 'm': m})
+    # save n, M, m to the hap directory
+    # in txt
+    with open(f"{args_local['hap']}/data_dim.txt", "w") as f:
+        f.write(f"{n}\n")
+        f.write(f"{M}\n")
+        f.write(f"{m}\n")
+
     param = namespace.param
     conf = load_conf(param)
     indices, h_keys, merge_order = load_LSH_params(param)
+
     init_conf(conf, namespace)
     print_summary(conf)
     print("=" * 50)

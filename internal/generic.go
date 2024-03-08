@@ -1,6 +1,10 @@
 package internal
 
 import (
+	"fmt"
+	"os"
+
+	"go.dedis.ch/onet/v3/log"
 	"gonum.org/v1/gonum/mat"
 )
 
@@ -70,3 +74,20 @@ func ToFloat(array []uint64) []float64 {
 
 // Side is Left or Right
 type Side bool
+
+func ReadDataDim(filePath string) (int, int, int) {
+	f, err := os.Open(filePath)
+	if err != nil {
+		log.Fatal("Unable to read input file "+filePath, err)
+	}
+	defer f.Close()
+
+	// read three integers
+	var n, M, m int
+	_, err = fmt.Fscanf(f, "%d\n%d\n%d", &n, &M, &m)
+	if err != nil {
+		log.Fatal("Unable to read input file "+filePath, err)
+	}
+
+	return n, M, m
+}

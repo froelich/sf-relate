@@ -2,7 +2,10 @@ package relativeMatch
 
 import (
 	"fmt"
+	"os"
+	"os/exec"
 	"path/filepath"
+	"strconv"
 	"time"
 
 	"github.com/BurntSushi/toml"
@@ -29,6 +32,7 @@ type BasicProtocolConfig struct {
 
 	SharedKeysPath string `toml:"shared_keys_path"`
 	BindingIP      string `toml:"binding_ipaddr"`
+	Para           int    `toml:"PARA"`
 }
 
 type BasicProtocolInfo struct {
@@ -70,8 +74,7 @@ func InitializeBasicProtocol(pid int, configFolder string, network mpc.ParallelN
 		log.LLvl1(config.Servers)
 		log.LLvl1(config.NumMainParties)
 		log.LLvl1(config.MpcNumThreads)
-		// warning: This uses a determistic random stream and should not be used in real deployment
-		networks = mpc.ParallelNetworks(mpc.InitCommunication(config.BindingIP, config.Servers, pid, config.NumMainParties+1, config.MpcNumThreads, ""))
+		networks = mpc.ParallelNetworks(mpc.InitCommunication(config.BindingIP, config.Servers, pid, config.NumMainParties+1, config.MpcNumThreads, config.SharedKeysPath))
 	} else {
 		networks = network
 	}
@@ -97,7 +100,44 @@ func InitializeBasicProtocol(pid int, configFolder string, network mpc.ParallelN
 	}
 
 	cps := networks.CollectiveInit(params, prec)
+	// Access shared random seed to use for sampling hashing parameters
+	// The seed is sampled from the Network[0]
+	networks[0].Rand.SwitchPRG(-1)
+	seed := make([]byte, 16)
+	networks[0].Rand.RandRead(seed)
+	networks[0].Rand.RestorePRG()
+	log.LLvl1("Seed for shared hashing randomness:", seed)
 
+	// save the seed in a file named "seed.bin" to be read by the python scrip0t
+	file, err := os.OpenFile(filepath.Join(config.SharedKeysPath, "seed.bin"), os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		panic(err)
+	}
+	defer file.Close()
+	// write the bytes in seed to the file
+	_, err = file.Write(seed)
+	if err != nil {
+		panic(err)
+	}
+
+	if pid != 0 {
+		// Run MHE step 0 to generate the shared hashing randomness
+		log.LLvl1("Running step 0 to generate shared parameters")
+		out, err := exec.Command("python3", "notebooks/step0_sample_shared_keys.py", "-PARTY", strconv.Itoa(pid), "-FOLDER", configFolder).Output()
+		if err != nil {
+			log.LLvl1(string(out))
+			panic(err)
+		}
+		log.LLvl1("Finished sampling shared hash table parameters!")
+		log.LLvl1("Done hashing.")
+		out, err = exec.Command("python3", "notebooks/step1_hashing.py", "-PARTY", strconv.Itoa(pid), "-FOLDER", configFolder).Output()
+		if err != nil {
+			log.LLvl1(string(out))
+			panic(err)
+		}
+		log.LLvl1(string(out))
+	}
+	log.LLvl1("Moving onto the actual MHE (step 2)")
 	return &BasicProtocolInfo{
 		MpcObj: mpcEnv,
 		Cps:    cps,

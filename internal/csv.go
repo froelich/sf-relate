@@ -4,10 +4,11 @@ import (
 	"encoding/csv"
 	"errors"
 	"fmt"
-	"go.dedis.ch/onet/v3/log"
 	"io"
 	"os"
 	"strconv"
+
+	"go.dedis.ch/onet/v3/log"
 )
 
 // CSV is a File splitting at the given Side

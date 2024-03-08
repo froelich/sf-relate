@@ -2,18 +2,35 @@
 # ============= IS AT THE END OF THIS FILE ===================
 
 # ================== EXPERIMENT CONFIGURATIONS ==================
-# Number of individuals in the dataset (note that it was n in python code)
-N = 1601
-M = 145181 # total number of SNPs in the full panel
+## ==================== STEP 0 (BASIC) ===========================
+N = 204928 # size of hash tables (recommend: 64 * total number of individuals on both parties)
+# Increase N to improve recall, 
+# at the cost of inicreasing number of comparisons and thus runtime in step 2
+
+## ==================== STEP 0 (ADVANCED) ========================
+# The following advanced parameters come with default values. 
+# While the default values should work well on most datasets, 
+# users can modify them based on their needs, notably when specific IBD structures are known about the datasets.
+enclen = 80 # the number of snps in each encoded split haplotype segment
+seglen = 8.0 # centi-Morgan length of each split haplotype segment
+steplen = 4.0 # centi-Morgan spacing between the beginning of each split haplotype segment
+k = 8 # number of SNPs in each kSNP token for hashing
+l = 4 # number of hash tokens to construct every hash index
+maxL = 6 # max number of repetitive hashing; increase and retry if table saturation is low (should be larger than the argument to step_1_hashing.py)
+s = 0.7 # subsampling rate (i.e. num(outputSNPs)/num(SNPs in .pvar))
+
+## ======================== STEP 1 ===============================
+L = 3 # number of repetitive hashing; increase and retry if table saturation is low; if not enough repetition hash keys are sampled in step0 (default number of keys is maxL=6), redo step0 with a larger maxL.
+## ======================== STEP 2 ===============================
+# <!-- N = 1601
+# M = 145181 # total number of SNPs in the full panel -->
 
 # select output modes
 reveal = 0
 # reveal = 1
 # reveal = 2
 # reveal = 3
-
 # reveal = 0 is SF-Related's default (one indicator per individual per party) that computes whether the max kinship is larger than the degree 3 threshold
-
 # reveal = 1 computes 4 indicators per individual per party, each meaning whether the max kinship is larger than the corresponding degree threshold in thres_value 
 thresh_value= [1.8232, 1.6464, 1.2928, 0.5857] # correspond to degree 3, 2, 1, 0
 # reveal = 2 computes 16 indicators per individual per party using the following thresholds (can be customized, but the runtime of phase 2 will scale accordingly.)
@@ -22,7 +39,7 @@ discretized_thresh= [2.0,1.9375,1.875,1.8125,1.75,1.6875,1.625,1.5625,1.5,1.375,
 
 # ============ ADVANCED/INTERNAL PROTOCOL CONFIGURATIONS ============
 # ================== DO NOT MODIFY BELOW THIS LINE ==================
-# ================= UNLESS YOU UNDERSTAND THE CODES =================
+# ================= UNLESS YOU UNDERSTAND THE CODE ==================
 # Data
 npz = true
 start_key = 0
@@ -74,6 +91,9 @@ bucket_size	= 1
 # ================== DO NOT MODIFY ABOVE THIS LINE ==================
 
 # ================== MACHINE CONFIGURATIONS ==================
+# Shared keys used in the protocols
+shared_keys_path = "config/demo/keys/"
+
 # num threads --- should be set to about 10 * num of cores
 nbr_threads = 1280 
 
@@ -91,4 +111,5 @@ ports  = {party2 = "9210"}
 ipaddr = "127.0.0.1"
 ports  = {}
 # ============================ END OF FILE ==========================
+
 # ================== DO NOT MODIFY BELOW THIS LINE ==================

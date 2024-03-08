@@ -2,34 +2,56 @@ import numpy as np
 from default_config import conf
 import argparse
 import pickle
-from my_util import *
 from kmers import *
+from my_util import *
+import pandas as pd
+from joblib import Parallel, delayed
+import numpy as np
+import tomlkit
+import os 
 
 if __name__ == "__main__":
-    parser=argparse.ArgumentParser(description=
-                                   '''Python script to sample shared random parameters for hashing.
+    # read environment variables in python
+    parser = argparse.ArgumentParser(description='Sample Hashing Randomness')
+    parser.add_argument('-PARTY', type=int, help='party id', required=True)
+    parser.add_argument('-FOLDER', type=str, help='path to the configuration folder', required=True)
+    args = parser.parse_args()
+    party_id = args.PARTY
+    FOLDER = args.FOLDER
+    
+    args_local = tomlkit.load(open(f"{FOLDER}/configLocal.Party{party_id}.toml"))
+    args_global = tomlkit.load(open(f"{FOLDER}/configGlobal.toml"))
+    args_local['param'] = args_local['shared_param_dir']
+    args_local['out'] = args_local['shared_param_dir']
+    args_local['hap'] = args_local['haps_dir']
+    args_local['pos'] = args_local['pos_dir']
+    args_local['gmap'] = args_local['gmap_dir']
+    args_local['pos'] = args_local['pos_dir']
+    args_local['maf'] = args_local['maf_dir']
+    namespace = argparse.Namespace()
+    namespace.__dict__.update(args_global)
+    namespace.__dict__.update(args_local)
 
-                                   Please make sure the parameters are the same on the two parties and provide the path to step_1_hashing.py
-                                   ''')
-    parser.add_argument('-N', type=str, help='size of hash tables (recommend: 64 * total number of individuals on both parties)', required=True)
-    parser.add_argument('-pos', type=str, help='the directory storing the bp positions. Files are named chr{i}.txt for i = 1..22. They contain the list of physical positions of each SNPs on the haplotypes (one number per line).', required=True)
-    parser.add_argument('-gmap', type=str, help='the directory storing the genetic maps. Files are named chr{i}.gmap.gz (in gz format) for i = 1..22. The first line of the file contains `pos\tchr\tcM`, and each following line contains the bp location, the chromosome ID and the corresponding genetic location (separated by tabs). One can retrieve these files from [shapeit4](https://github.com/odelaneau/shapeit4/tree/master/maps) or other public resources, but should be careful to make sure the correct genome build locations is used.', required=True)
-    parser.add_argument('-maf', type=str, help='the directory storing the maf files. Files are named chr{i}.txt for i = 1..22. Each line in the file stores a floating point number denoting the MAF of that base pair.', required=True)
-    parser.add_argument('-out', type=str, help='output directory to store the parameters', required=True)
-    parser.add_argument('-enclen', type=int, help='the number of snps in each encoded split haplotype segment (default: 80).', default=80)
-    parser.add_argument('-seglen', type=float, help='centi-Morgan length of each split haplotype segment (default: 8.0)', default=8.0)
-    parser.add_argument('-steplen', type=float, help='centi-Morgan spacing between the beginning of each split haplotype segment (default: 4.0)', default=4.0)
-    parser.add_argument('-k', type=int, help='number of SNPs in each kSNP token for hashing (default: 8)', default=8)
-    parser.add_argument('-l', type=int, help=' number of hash tokens to construct every hash index (default: 4)', default=4)
-    parser.add_argument('-maxL', type=int, help='max number of repetitive hashing; increase and retry if table saturation is low     (default: 6; should be larger than the argument to step_1_hashing.py)', default=6)
-    namespace = parser.parse_args()
+    with open(args_global['shared_keys_path'] + "seed.bin", "rb") as f:
+        seed = int.from_bytes(f.read(), 'big')
+    print(seed)
+    gen = np.random.default_rng(seed)
+
+    # find out which line in pvar_file start with #CHROM
+    psam, snps, pvar = read_pgen_metadata(args_local)
+    n, m = len(psam), len(pvar)
+    namespace.__dict__.update({'n': n, 'm': m})
     init_conf(conf, namespace)
+    conf['L'] = namespace.maxL
 
+    # =============================================================================
+    # Step 0a: Sample Hashing Randomness
     chr_begin = conf['chr_range'].start
     chr_end = conf['chr_range'].stop
     max_segs = conf['max_segs']
 
     print("=" * 50)
+    print("=" * 20  + "Shared seed: ", seed)
     print("*" * 2 + " " * 3 +  "SF-Relate Step 0a: Sample Hashing Randomness" + " " * 3 + "*" * 2)
 
     L = namespace.maxL
@@ -60,8 +82,8 @@ if __name__ == "__main__":
                         raise ValueError(f"not enough SNPs in this segment")
                     # sample hash keys according to LSH_mode in conf
                     if conf['LSH_mode'] == 'Hamming':
-                        h_keys[tid, trial_id] = ([(np.random.randint(0, kmer_enc_len, dtype=np.int32),) for _ in range(conf['l'])],
-                                                 [np.random.randint(1, coef_uHash_range, dtype=np.uint32)
+                        h_keys[tid, trial_id] = ([(gen.integers(0, kmer_enc_len, dtype=np.int32),) for _ in range(conf['l'])],
+                                                 [gen.integers(1, coef_uHash_range, dtype=np.uint32)
                                                  for _ in range(max(conf['l'], conf['k']))] if conf['hash_mode'] == 2 else None)
                     else:
                         raise(NameError(f"LSH_mode {conf['LSH_mode']} not supported"))
@@ -83,7 +105,7 @@ if __name__ == "__main__":
     merge_order = np.full((L), None, dtype=np.object_)
     for i in range(L):
         if i % 2 == 0:
-            merge_order[i] = np.random.permutation(max_num_trial)
+            merge_order[i] = gen.permutation(max_num_trial)
         else:
             merge_order[i] = merge_order[i-1][::-1]  
 
@@ -97,3 +119,21 @@ if __name__ == "__main__":
         f.write(print_summary(conf, out=False))
 
     print(f"Output saved in {conf['out_dir']}" + ("/" if conf['out_dir'][-1] != "/" else ""))
+
+    # =============================================================================
+    # Step 0b: Sample a subset of SNPs
+
+    ratio = args_global['s']
+    save_path = args_local['sketched_snps_dir']
+    M = len(snps)
+    print("=" * 51)
+    print("*" * 2 + " " * 3 +  "SF-Relate Step 0b: Sample a subset of SNPs" + " " * 3 + "*" * 2)
+
+    snp_len = int(ratio * M)
+    print(f"  Sub-sampling rate = {ratio}\n  # of SNPs in subset = {snp_len}")
+    snp_range = gen.choice(M, (snp_len), replace=False)
+    snp_range = np.sort(snp_range).astype(np.int32)
+    np.savez(save_path + f"/SNPs.npz", snp_range = snp_range)
+    with open(save_path + f"/num_SNP.txt", "w") as f:
+        f.write(f"{snp_len}")
+    print(f"** Output saved in {save_path}" + ("/" if save_path[-1] != "/" else ""))

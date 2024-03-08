@@ -135,7 +135,6 @@ func computeSignTestResults(pi *ProtocolInfo, net *mpc.Network, hetXRepEncode cr
 		maxOfInvHet := computeMinimum(cps, signDiffHet, hetYInvRep, hetXInvRepEncode)
 		kinshipCoeffs := crypto.CMult(cps, maxOfInvHet, distance)
 		kinshipCoeffs = crypto.CRescale(cps, kinshipCoeffs)
-
 		if pi.reveal == 1 || pi.reveal == 2 {
 			var kinshipThres []float64
 			if pi.reveal == 1 {
@@ -161,7 +160,7 @@ func computeSignTestResults(pi *ProtocolInfo, net *mpc.Network, hetXRepEncode cr
 						net.CollectiveBootstrap(cps, kinshipCoeffs[i], sourcePid)
 						mutex.Unlock()
 					}
-					rst := pi.signTestComposed(cps, net, nil, leftEncode, kinshipCoeffs, &mutex, maskEncoded, sourcePid, 3, numIter)
+					rst := pi.signTestComposed(cps, net, nil, leftEncode, kinshipCoeffs, &mutex, maskEncoded, sourcePid, idx, numIter)
 
 					// should drop level before exchanging
 					rst = crypto.DropLevelVec(cps, rst, 2)

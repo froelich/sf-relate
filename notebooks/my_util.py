@@ -117,27 +117,22 @@ def report_time(a, b, output=False):
     return H
 
 def init_conf(conf, namespace, create_out=True):
-    try :
-        conf['n'] = namespace.n
-        conf['param_dir'] = namespace.param
-        conf['hap_dir'] = namespace.hap
-    except AttributeError:
-        conf['key_space_size'] = int(namespace.N)
-        conf['pos_dir'] = namespace.pos
-        conf['maf_dir'] = namespace.maf
-        conf['gmap_dir'] = namespace.gmap
-        conf['SNP_CNT_MIN'] = namespace.enclen
-        # default to  half-overlapping segments
-        assert conf['mode'] == 4
-        conf['len_seg_cM'] = namespace.seglen  
-        conf['step_cM'] = namespace.steplen
-        conf['k'] = namespace.k
+    conf['n'] = namespace.n
+    conf['param_dir'] = namespace.param
+    conf['hap_dir'] = namespace.hap
+    conf['key_space_size'] = int(namespace.N)
+    conf['pos_dir'] = namespace.pos_dir
+    conf['maf_dir'] = namespace.maf
+    conf['gmap_dir'] = namespace.gmap
+    conf['SNP_CNT_MIN'] = namespace.enclen
+    # default to  half-overlapping segments
+    assert conf['mode'] == 4
+    conf['len_seg_cM'] = namespace.seglen  
+    conf['step_cM'] = namespace.steplen
+    conf['k'] = namespace.k
         # if 'step_cM' not in conf:
         #     conf['step_cM'] = conf['len_seg_cM'] / 2
-    try:
-        conf['L'] = namespace.L
-    except AttributeError:
-        conf['L'] = namespace.maxL
+    conf['L'] = namespace.L
 
     conf['max_cMs'] = np.asarray(conf['max_cMs'])
     conf['max_segs'] = [0] + [int(a) for a in np.floor(((conf['max_cMs'] - conf['len_seg_cM'])/conf['step_cM']))]
@@ -190,3 +185,23 @@ def load_table(conf, party, tmp=""):
     B = loaded['B']
     id_table = loaded['ID_table']
     return id_table.reshape((N, B)), N, B
+
+
+def read_pgen_metadata(args_local):
+    fprefix = args_local['haps_dir'] + "all_chrs"
+    # + f'chr{chrom}'
+    pvar_file = fprefix + ".pvar"
+    psam_file = fprefix + ".psam"
+
+    snp_list_for_king = args_local['snp_list']
+
+    with open(pvar_file) as f:
+        for i, line in enumerate(f):
+            if line.startswith("#CHROM"):
+                header_line = i
+                break
+
+    psam = pd.read_csv(psam_file, sep='\t')
+    snps = np.loadtxt(snp_list_for_king, dtype=str)
+    var_info = pd.read_csv(pvar_file, sep='\t', usecols=['#CHROM', 'ID', 'POS', 'REF', 'ALT'], skiprows=header_line)
+    return psam, snps, var_info

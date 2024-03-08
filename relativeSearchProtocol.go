@@ -50,6 +50,7 @@ type ProtocolInfo struct {
 	numberOfColumnsTest int
 	npz                 bool
 	n                   int
+	PARA                int
 	totalNbrOfRows      int
 	totalNbrOfRowsTest  int
 	blockLimit          int
@@ -57,6 +58,7 @@ type ProtocolInfo struct {
 	endKey              int
 	rowIndexFile        string
 	columnIndexFile     string
+	outFolder           string
 	batchLength         int
 	queryLength         int
 
@@ -66,7 +68,7 @@ type ProtocolInfo struct {
 }
 
 type ConfigRelative struct {
-	SimpleDataPath      string           `toml:"simple_data_path"`
+	SimpleDataPath      string           `toml:"geno_dir"`
 	Separator           string           `toml:"separator"`
 	NumberOfColumns     int              `toml:"number_of_columns"`
 	NumberOfColumnsTest int              `toml:"number_of_columns_test"`
@@ -92,18 +94,18 @@ type ConfigRelative struct {
 	Debug_ST_flag bool `toml:"debug_st_flag"`
 
 	Npz                bool   `toml:"npz"`
-	N                  int    `toml:"N"`
-	M                  int    `toml:"M"`
 	TotalNbrOfRows     int    `toml:"total_nbr_rows"`
 	TotalNbrOfRowsTest int    `toml:"total_nbr_rows_test"`
 	BlockLimit         int    `toml:"block_limit"`
 	StartKey           int    `toml:"start_key"`
 	EndKey             int    `toml:"end_key"`
-	RowIndexFile       string `toml:"row_index_file"`
-	ColumnIndexFile    string `toml:"column_index_file"`
+	RowIndexFile       string `toml:"hash_table_dir"`
+	ColumnIndexFile    string `toml:"sketched_snps_dir"`
 	BatchLength        int    `toml:"batch_length"`
 	QueryLength        int    `toml:"query_length"`
 	LocalTest          bool   `toml:"local_test"`
+	Haps_dir           string `toml:"haps_dir"`
+	PARA               int    `toml:"PARA"`
 
 	UseMPC bool `toml:"use_mpc"`
 }
@@ -123,6 +125,11 @@ func InitializeRelativeMatchingProtocol(pid int, configFolder string, network mp
 		fmt.Println(err)
 		return nil
 	}
+	// define the local n and M here
+	// read it from the file configRelativeLocal.haps_dir/data_dim.txt
+	fname := filepath.Join(configRelativeLocal.Haps_dir, "data_dim.txt")
+	// read the three integers, one per line
+	n, M, _ := internal.ReadDataDim(fname)
 
 	return &ProtocolInfo{
 		basicProt:           basicProt,
@@ -135,24 +142,26 @@ func InitializeRelativeMatchingProtocol(pid int, configFolder string, network mp
 		numThreads:          configRelativeGlobal.NumberOfThreads,
 		threshValue:         configRelativeGlobal.ThreshValue,
 		discretizedThresh:   configRelativeGlobal.DiscretizedThresh,
-		M:                   configRelativeGlobal.M,
+		M:                   M,
 		bucketSize:          configRelativeGlobal.BucketSize,
 		blinding:            configRelativeGlobal.Blinding,
 		single:              configRelativeGlobal.Single,
 		reveal:              configRelativeGlobal.Reveal,
-		simpleDataPath:      configRelativeLocal.SimpleDataPath,
+		simpleDataPath:      configRelativeLocal.SimpleDataPath + "all_chrs.bin",
 		startingIndex:       configRelativeLocal.StartingIndex,
+		PARA:                configRelativeLocal.PARA,
 		numberOfColumns:     configRelativeGlobal.NumberOfColumns,
 		numberOfColumnsTest: configRelativeGlobal.NumberOfColumnsTest,
 		npz:                 configRelativeGlobal.Npz,
-		n:                   configRelativeGlobal.N,
+		n:                   n,
 		totalNbrOfRows:      configRelativeGlobal.TotalNbrOfRows,
 		totalNbrOfRowsTest:  configRelativeGlobal.TotalNbrOfRowsTest,
 		blockLimit:          configRelativeGlobal.BlockLimit,
 		startKey:            configRelativeGlobal.StartKey,
 		endKey:              configRelativeGlobal.EndKey,
-		rowIndexFile:        configRelativeLocal.RowIndexFile,
-		columnIndexFile:     configRelativeLocal.ColumnIndexFile,
+		outFolder:           configFolder + "/out/",
+		rowIndexFile:        configRelativeLocal.RowIndexFile + "ID_table.npz",
+		columnIndexFile:     configRelativeLocal.ColumnIndexFile + "SNPs.npz",
 		batchLength:         configRelativeGlobal.BatchLength,
 		queryLength:         configRelativeGlobal.QueryLength,
 		localTest:           configRelativeGlobal.LocalTest,
@@ -359,8 +368,8 @@ func (pi *ProtocolInfo) BatchProtocols(configFolder string, sending bool, startK
 				mutex.Lock()
 				decrypted := pi.decryptVectorForDebugging(pi.basicProt.Cps, currentResultHE[3-pid].Result[0], pid)
 				mutex.Unlock()
-				folder := os.Getenv("FOLDER")
-				save_array(decrypted, folder+"kinship_"+strconv.Itoa(batchStart)+"_party"+strconv.Itoa(pid)+".txt", false, false)
+				log.LLvl1(pi.outFolder + "raw/kinship_block_" + strconv.Itoa(batchStart) + "_party" + strconv.Itoa(pid) + ".txt")
+				save_array(decrypted, pi.outFolder+"raw/kinship_block_"+strconv.Itoa(batchStart)+"_party"+strconv.Itoa(pid)+".txt", false, false)
 			}
 		}
 		log.LLvl1("Time for batch ", batchStart, " is ", time.Since(time_start))
@@ -416,6 +425,7 @@ func (pi *ProtocolInfo) RelativeSearchProtocol(sending bool, batchStart int, mut
 				// if number of rows is small, we already duplicate --> fill ciphertext
 				nbrofPossibleRepeat := int(float64(cps.Params.Slots()) / float64(len(pi.simpleData)))
 				log.LLvl1(pid, "has ", len(pi.simpleData), " rows and can duplicate it ", nbrofPossibleRepeat, "times.")
+				// Maybe should scale down local here too?
 				X, nbrofActualRepeat = prepareLocalDataToSend(cps, pid, Xlocal, nbrofPossibleRepeat, 1.0/pi.scaleDown, pi.bucketSize)
 			} else {
 				panic("1 vs n case is not implemented")
@@ -835,14 +845,14 @@ func Frac_part(decrypte_XY []complex128) []complex128 {
 	return errToInt
 }
 
-func (pi *ProtocolInfo) signTestComposed(cps *crypto.CryptoParams, net *mpc.Network, left crypto.CipherVector, leftPlain crypto.PlainVector, distance crypto.CipherVector, mutex *sync.Mutex, maskEncoded crypto.PlainVector, sourcePid int, i int, numIter int) crypto.CipherVector {
+func (pi *ProtocolInfo) signTestComposed(cps *crypto.CryptoParams, net *mpc.Network, left crypto.CipherVector, leftPlain crypto.PlainVector, distance crypto.CipherVector, mutex *sync.Mutex, maskEncoded crypto.PlainVector, sourcePid int, saveInOut int, numIter int) crypto.CipherVector {
 	if left == nil && leftPlain == nil || left != nil && leftPlain != nil {
 		panic("Exactly one ciphertext left or plain left should be supplied")
 	}
 	// might need to change scaleInd
-	tmp := pi.SignTest(cps, net, left, leftPlain, distance, mutex, maskEncoded, sourcePid, pi.approxInt, i, 2, i)
+	tmp := pi.SignTest(cps, net, left, leftPlain, distance, mutex, maskEncoded, sourcePid, pi.approxInt, saveInOut, 2, saveInOut)
 	for j := 1; j <= numIter; j++ {
-		tmp = pi.SignTestImgRemoved(cps, net, tmp, mutex, maskEncoded, sourcePid, pi.approxInt, j+2, i)
+		tmp = pi.SignTestImgRemoved(cps, net, tmp, mutex, maskEncoded, sourcePid, pi.approxInt, j+2, saveInOut)
 	}
 
 	return PostprcoessSignTest(cps, tmp, false)
