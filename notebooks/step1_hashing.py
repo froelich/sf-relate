@@ -270,6 +270,15 @@ if __name__ == '__main__':
     namespace.__dict__.update({'n': n, 'm': m})
     # save n, M, m to the hap directory
     # in txt
+    M = Path(f"{args_local['geno_dir']}/all_chrs.bin").stat().st_size
+    try:
+        assert(M % n == 0)
+    except AssertionError:
+        print("The number of bytes in the .pgen file is not a multiple of the number of samples.")
+        print("Please check the file and try again.")
+        sys.exit(1)
+    M //= n
+    print(M)
     with open(f"{args_local['hap']}/data_dim.txt", "w") as f:
         f.write(f"{n}\n")
         f.write(f"{M}\n")

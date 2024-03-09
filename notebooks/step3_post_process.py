@@ -38,7 +38,7 @@ if __name__ == "__main__":
     else:
         raise ValueError('reveal should be 0, 1, 2, or 3')
 
-    out_dir = FOLDER + "out/"
+    out_dir = FOLDER + "/out/"
     if reveal == 3:
         # change all computed block's kinship to the real kinship
         all_kinship = []
@@ -48,15 +48,21 @@ if __name__ == "__main__":
             rem = 8192
         ID_pos = np.hstack((ID_pos, [n] * (8192 - rem)))
         nB = len(ID_pos) // 8192
+        N = 0
         for bb in range(nB):
-            all_kinship.append(np.loadtxt(f"{out_dir}/raw/kinship_block_{bb}_party{party_id}.txt", dtype=float))
+            try:
+                all_kinship.append(np.loadtxt(f"{out_dir}/raw/kinship_block_{bb}_party{party_id}.txt", dtype=float))
+                N += len(all_kinship[-1])
+            except OSError:
+                print(f"File {out_dir}/raw/kinship_block_{bb}_party{party_id}.txt not found")
+                break
         all_kinship = np.concatenate(all_kinship, axis=0)
         IIDs = np.hstack((psam['#IID'], [0]))
         ID_pos[ID_pos == -1] = n
         # extend ID_pos by n until it's a multiple of 8192
         ls_psam = IIDs[ID_pos]
-        computed = pd.DataFrame({"#IID" : ls_psam, "kinship" : all_kinship})
-        ls_psam.to_csv(f"{out_dir}/kinship_block_party{party_id}.tsv", index=False, sep='\t')
+        computed = pd.DataFrame({"#IID" : ls_psam[:N], "Result" : 1/2 - 1/4 * all_kinship})
+        computed.to_csv(f"{out_dir}/kinship_block_party{party_id}.tsv", index=False, sep='\t')
     else:
         nB = int(np.ceil(n / args_global['batch_length']))
         stat_computed = pd.DataFrame({'ID' : np.arange(n), '#IID': psam['#IID'], col_name : nOutputs})

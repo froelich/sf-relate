@@ -68,6 +68,12 @@ func (pi *ProtocolInfo) inferParams(hard_reset bool) {
 
 func TestRelativeSearchProtocol(t *testing.T) {
 	configFolder := folder
+	if folder == "" {
+		panic("FOLDER environment variable not set")
+	}
+	if os.Getenv("PID") == "" {
+		panic("PID environment variable not set")
+	}
 
 	timeTotal := time.Now()
 	prot := InitializeRelativeMatchingProtocol(pid, configFolder, nil)

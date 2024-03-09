@@ -369,7 +369,7 @@ func (pi *ProtocolInfo) BatchProtocols(configFolder string, sending bool, startK
 				decrypted := pi.decryptVectorForDebugging(pi.basicProt.Cps, currentResultHE[3-pid].Result[0], pid)
 				mutex.Unlock()
 				log.LLvl1(pi.outFolder + "raw/kinship_block_" + strconv.Itoa(batchStart) + "_party" + strconv.Itoa(pid) + ".txt")
-				save_array(decrypted, pi.outFolder+"raw/kinship_block_"+strconv.Itoa(batchStart)+"_party"+strconv.Itoa(pid)+".txt", false, false)
+				save_array(decrypted, pi.outFolder+"raw/kinship_block_"+strconv.Itoa(batchStart/8192)+"_party"+strconv.Itoa(pid)+".txt", false, false)
 			}
 		}
 		log.LLvl1("Time for batch ", batchStart, " is ", time.Since(time_start))

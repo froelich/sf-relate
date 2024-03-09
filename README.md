@@ -29,16 +29,10 @@ git clone https://github.com/froelich/sf-relate.git
 cd sf-relate
 go get relativeMatch
 go build
+go test -c -o goParty
 ```
-
 If `go build` produces an error, run commands suggested by Go and try again. If the build
 finishes without any output, the package has been successfully configured.
-
-Finally, to build the go executable, run
-```
-/usr/local/go/bin/go test -c -o goParty
-go test -c -o foo
-```
 
 ## Usage
 ### Input data
@@ -64,7 +58,7 @@ python3 notebooks/pgen_to_npy.py -PARTY $i -FOLDER $FOLDER
 ```
 - It caches intermediate genotype and haplotype as `haps/chr$i.npy` and `geno/all_chrs.bin` files for faster Python and Go processing.
 - It extracts the list of base pairs positions as `pos/chr$i.txt`.
-#### Example script for running step 0 to step 2
+#### Example script for running the entire pipeline
 We provided a Makefile that reads the path to the configuration files defined in `test_param.sh` and triggers the corresponding party's execution.
 ```bash
 # for party 1
@@ -74,14 +68,14 @@ make party2
 ```
 The two `make` commands should be executed on each of the two data-contributing parties (`PID=1` and `PID=2`) separately.
 There is also a placeholder party 0 (`PID=0`) that is executed on party 1, and the first job `party1` spawns 2 go jobs for this.
-The exact `go` and `python` commands can be found in `[X,Y,Z]_local.sh`.
+The exact `go` and `python` commands also detailed in the following, can be found in `[X,Y,Z]_local.sh`.
 
-#### Step 0: Sampling Shared Randomness 
+##### Step 0: Sampling Shared Randomness 
 ```bash
 python3 step0_sample_shared_randomness.py -PARTY $i -FOLDER $FOLDER
 ```
 It generates the shared parameters by applying a non-cryptographic random number generator to the seed `$FOLDER/keys/seed.bin` and saves them in `shared_param_dir` and `sketched_snps_dir`.
-#### Step 1: Hashing
+##### Step 1: Hashing
 Both parties locally execute step 1 to hash the input samples into buckets.
 They do it locally because this step handles sensitive data.
 ```bash
@@ -89,12 +83,14 @@ python3 step1_hashing.py -PARTY $i -FOLDER $FOLDER
 ```
 For party `i`, the list of buckets used in [step 2](#step-2-mhe) are stored as `{hash_table_dir}/ID_table.npz`.
 
-#### Step 2: MHE
+##### Step 2: MHE
 Step 2 performs the kinship evaluation and accumulation under encryption over networks.
+Use the following to run step 2
 ```bash
-PID=$i /usr/local/go/bin/go test -run TestRelativeSearchProtocol -timeout 48h | tee /dev/tty > $FOLDER/logs/Y/test.txt
+CONFIG=config/demo PARTY=1 ./goParty
 ```
-#### Step 3: Post-process output
+Note that the binary executable re-runs step 0 to step 1.
+##### Step 3: Post-process output
 Step 3 locally clean up the decrypted results from step 2 into human-readable formats (see [output](#output)).
 ```bash
 python3 notebooks/step3_post_process.py -PARTY $i -FOLDER $FOLDER

@@ -160,7 +160,7 @@ func computeSignTestResults(pi *ProtocolInfo, net *mpc.Network, hetXRepEncode cr
 						net.CollectiveBootstrap(cps, kinshipCoeffs[i], sourcePid)
 						mutex.Unlock()
 					}
-					rst := pi.signTestComposed(cps, net, nil, leftEncode, kinshipCoeffs, &mutex, maskEncoded, sourcePid, idx, numIter)
+					rst := pi.signTestComposed(cps, net, nil, leftEncode, kinshipCoeffs, &mutex, maskEncoded, sourcePid, 3, numIter)
 
 					// should drop level before exchanging
 					rst = crypto.DropLevelVec(cps, rst, 2)

@@ -41,12 +41,6 @@ def read_pgen(data_path):
 
 n, m, buf = read_pgen(pgen_file)
 
-nn = len(psam)
-mm = len(snps)
-mmm = len(var_info)
-print(f"Number of samples: {nn}, number of SNPs: {mm}, number of variants: {mmm}")
-print(f"Number of rows in pgen: {n}, number of SNPs in pgen: {m}")
-
 # recode pgen to numpy files
 # and also output the list of pos
 # and the dimension of the matrix
@@ -87,8 +81,15 @@ def to_geno_count(x):
     return x[::2] + x[1::2]
 geno_matrix = to_geno_count(buf)
 
+
 king_snps = np.loadtxt(args_local['snp_list'], dtype=str)
 king_filt = var_info['ID'].isin(king_snps)
-geno_matrix[:, king_filt].tofile(f"{args_local['geno_dir']}/all_chrs.bin")
 
+geno = geno_matrix[:, king_filt].astype(np.int8)
+geno.tofile(f"{args_local['geno_dir']}/all_chrs.bin")
 
+nn = len(psam)
+mm = geno.shape[1]
+mmm = len(var_info)
+print(f"Number of samples: {nn}, number of SNPs: {mm}, number of variants: {mmm}")
+print(f"Number of rows in pgen: {n}, number of SNPs in pgen: {m}")
