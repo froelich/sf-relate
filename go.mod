@@ -5,7 +5,7 @@ go 1.18
 require (
 	github.com/BurntSushi/toml v0.4.1
 	github.com/hhcho/mpc-core v0.0.0-20220828210829-24cf7abd1073
-	github.com/hhcho/sfgwas v0.0.0-20240102090709-d1b7d6a3ddc7 // uses the sf-relate branch
+	github.com/hhcho/sfgwas v0.0.0-20240311154316-535793f25892 // uses the sf-relate branch
 	github.com/ldsec/lattigo/v2 v2.4.0
 	github.com/sbinet/npyio v0.7.0
 	go.dedis.ch/onet/v3 v3.2.10
