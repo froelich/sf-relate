@@ -1,11 +1,16 @@
 include test_param.sh
 all: X Y Z
 
-X:
+compile:
+	go get relativeMatch
+	go build
+	go test -c -o goParty
+
+X: compile
 	bash X_local.sh 
-Y:
+Y: compile
 	bash Y_local.sh 
-Z:
+Z: compile
 	bash Z_local.sh 
 party1: X Z
 party2: Y
