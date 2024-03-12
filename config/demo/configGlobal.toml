@@ -22,8 +22,7 @@ s = 0.7 # subsampling rate (i.e. num(outputSNPs)/num(SNPs in .pvar))
 ## ======================== STEP 1 ===============================
 L = 3 # number of repetitive hashing; increase and retry if table saturation is low; if not enough repetition hash keys are sampled in step0 (default number of keys is maxL=6), redo step0 with a larger maxL.
 ## ======================== STEP 2 ===============================
-# <!-- N = 1601
-# M = 145181 # total number of SNPs in the full panel -->
+PARA = 3 # Number of parallel processes to use. Set to 20 for the UKB dataset with 100K individual * 90K SNPs on the Google Cloud machine with 128 cores and 576GB memory. Should be set as large as possible to utilize all CPUs and memory. Exact value depends on the machine and dataset sizes. Users can provide reasonable parameters like 5 and retry with a smaller one if it fails due to memory constraints.
 
 # select output modes
 reveal = 0

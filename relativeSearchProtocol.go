@@ -149,7 +149,7 @@ func InitializeRelativeMatchingProtocol(pid int, configFolder string, network mp
 		reveal:              configRelativeGlobal.Reveal,
 		simpleDataPath:      configRelativeLocal.SimpleDataPath + "all_chrs.bin",
 		startingIndex:       configRelativeLocal.StartingIndex,
-		PARA:                configRelativeLocal.PARA,
+		PARA:                configRelativeGlobal.PARA,
 		numberOfColumns:     configRelativeGlobal.NumberOfColumns,
 		numberOfColumnsTest: configRelativeGlobal.NumberOfColumnsTest,
 		npz:                 configRelativeGlobal.Npz,

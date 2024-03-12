@@ -124,8 +124,6 @@ export FOLDER="config/$t/"
 
 ### Local Parameters (`configLocal.Party[0-2].toml`)
 ```toml
-PARA = 1 # Number of parallel processes to use. Set to 20 for the UKB dataset with 100K individual * 90K SNPs on the Google Cloud machine with 128 cores and 576GB memory. Should be set as large as possible to utilize all CPUs and memory. Exact value depends on the machine and dataset sizes. Users can provide reasonable parameters like 5 and retry with a smaller one if it fails due to memory constraints.
-
 # input directories
 haps_dir = "notebooks/trial/party1/haps/" # containing all_chrs.[pgen|pvar|psam]
 snp_list = "notebooks/trial/snps_king.txt"
@@ -172,6 +170,8 @@ The other parameters (`L`) need to be adjusted according to the local statistics
 #### Configuring [step 2: MHE](#step-2-mhe)
 ```toml
 ## ======================== STEP 2 ===============================
+PARA = 1 # Number of parallel processes to use. Set to 20 for the UKB dataset with 100K individual * 90K SNPs on the Google Cloud machine with 128 cores and 576GB memory. Should be set as large as possible to utilize all CPUs and memory. Exact value depends on the machine and dataset sizes. Users can provide reasonable parameters like 5 and retry with a smaller one if it fails due to memory constraints.
+
 # select output modes
 reveal = 0
 # reveal = 1
