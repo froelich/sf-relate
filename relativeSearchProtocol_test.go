@@ -19,7 +19,6 @@ import (
 	"go.dedis.ch/onet/v3/log"
 )
 
-var pid, _ = strconv.Atoi(os.Getenv("PID"))
 var folder = os.Getenv("FOLDER")
 var paraRun int
 
@@ -75,6 +74,12 @@ func TestRelativeSearchProtocol(t *testing.T) {
 		panic("PID environment variable not set")
 	}
 
+	// test the main setting of the protocol
+	runParty(configFolder, os.Getenv("PID"))
+}
+
+func runParty(configFolder string, pid_str string) {
+	pid, _ := strconv.Atoi(pid_str)
 	timeTotal := time.Now()
 	prot := InitializeRelativeMatchingProtocol(pid, configFolder, nil)
 	prot.inferParams(false)
@@ -82,10 +87,9 @@ func TestRelativeSearchProtocol(t *testing.T) {
 	paraRun = prot.PARA
 
 	if prot.TestSignTest == 0 {
-		// test the main setting of the protocol
-		globalResult := runPhase1withTime(prot, configFolder)
+		globalResult := runPhase1withTime(prot, configFolder, pid)
 		if pid > 0 {
-			runPhase2WithTime(prot, globalResult)
+			runPhase2WithTime(prot, globalResult, pid)
 		}
 	} else {
 		panic("Other testing modes are removed")
@@ -94,15 +98,15 @@ func TestRelativeSearchProtocol(t *testing.T) {
 	prot.SyncAndTerminate(true)
 }
 
-func runPhase1withTime(prot *ProtocolInfo, configFolder string) GlobalPhase1Result {
+func runPhase1withTime(prot *ProtocolInfo, configFolder string, pid int) GlobalPhase1Result {
 	timeStart := time.Now()
 	reportStats(timeStart, prot, " start phase 1: ")
-	globalResult := startProtocols(prot, configFolder)
+	globalResult := startProtocols(prot, configFolder, pid)
 	reportStats(timeStart, prot, " finish phase 1: ")
 	return globalResult
 }
 
-func runPhase2WithTime(prot *ProtocolInfo, globalResult GlobalPhase1Result) {
+func runPhase2WithTime(prot *ProtocolInfo, globalResult GlobalPhase1Result, pid int) {
 	timeStart := time.Now()
 	reportStats(timeStart, prot, " start phase 2 of MHE : ")
 	if prot.reveal == 0 || prot.reveal == 1 || prot.reveal == 2 {
@@ -120,7 +124,7 @@ func reportStats(timeStart time.Time, prot *ProtocolInfo, part_name string) {
 	prot.basicProt.MpcObj.GetNetworks().PrintNetworkLog()
 }
 
-func startProtocols(prot *ProtocolInfo, configFolder string) (globalResult GlobalPhase1Result) {
+func startProtocols(prot *ProtocolInfo, configFolder string, pid int) (globalResult GlobalPhase1Result) {
 	// partitionSize is the number of rows that each subprocess will process
 	// which is the total number of rows divided by the number of subprocesses (paraRun or PARA in the bash script)
 	// (rounded up to the nearest multiple of prot.batchLength = B = how many values are encrypted in each ciphertext)

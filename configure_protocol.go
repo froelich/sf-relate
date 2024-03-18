@@ -129,14 +129,18 @@ func InitializeBasicProtocol(pid int, configFolder string, network mpc.ParallelN
 			panic(err)
 		}
 		log.LLvl1("Finished sampling shared hash table parameters!")
-		log.LLvl1("Done hashing.")
 		out, err = exec.Command("python3", "notebooks/step1_hashing.py", "-PARTY", strconv.Itoa(pid), "-FOLDER", configFolder).Output()
+		log.LLvl1("Done hashing.")
 		if err != nil {
 			log.LLvl1(string(out))
 			panic(err)
 		}
 		log.LLvl1(string(out))
 	}
+	// need to synchronize
+	// wait for all parties to finish
+	synchronize(mpcEnv)
+
 	log.LLvl1("Moving onto the actual MHE (step 2)")
 	return &BasicProtocolInfo{
 		MpcObj: mpcEnv,
@@ -145,8 +149,8 @@ func InitializeBasicProtocol(pid int, configFolder string, network mpc.ParallelN
 	}
 }
 
-func (g *ProtocolInfo) SyncAndTerminate(closeChannelFlag bool) {
-	mainMPCObj := g.basicProt.MpcObj[0]
+func synchronize(mpcEnv []*mpc.MPC) {
+	mainMPCObj := mpcEnv[0]
 	pid := mainMPCObj.GetPid()
 
 	var dummy mpc_core.RElem = mainMPCObj.GetRType().Zero()
@@ -159,8 +163,12 @@ func (g *ProtocolInfo) SyncAndTerminate(closeChannelFlag bool) {
 		}
 	} else {
 		mainMPCObj.Network.SendRData(dummy, 0)
-		dummy = mainMPCObj.Network.ReceiveRElem(dummy, 0)
+		_ = mainMPCObj.Network.ReceiveRElem(dummy, 0)
 	}
+}
+
+func (g *ProtocolInfo) SyncAndTerminate(closeChannelFlag bool) {
+	synchronize(g.basicProt.MpcObj)
 
 	if closeChannelFlag {
 		// Close all threads
