@@ -32,7 +32,7 @@ if __name__ == "__main__":
     namespace.__dict__.update(args_global)
     namespace.__dict__.update(args_local)
 
-    with open(args_global['shared_keys_path'] + "seed.bin", "rb") as f:
+    with open(args_global['shared_keys_path'] + "/seed.bin", "rb") as f:
         seed = int.from_bytes(f.read(), 'big')
     print(seed)
     gen = np.random.default_rng(seed)

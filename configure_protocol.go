@@ -123,19 +123,12 @@ func InitializeBasicProtocol(pid int, configFolder string, network mpc.ParallelN
 	if pid != 0 {
 		// Run MHE step 0 to generate the shared hashing randomness
 		log.LLvl1("Running step 0 to generate shared parameters")
-		out, err := exec.Command("python3", "notebooks/step0_sample_shared_keys.py", "-PARTY", strconv.Itoa(pid), "-FOLDER", configFolder).Output()
-		if err != nil {
-			log.LLvl1(string(out))
-			panic(err)
-		}
+		cmd := exec.Command("python3", "notebooks/step0_sample_shared_keys.py", "-PARTY", strconv.Itoa(pid), "-FOLDER", configFolder)
+		runPython(cmd)
 		log.LLvl1("Finished sampling shared hash table parameters!")
-		out, err = exec.Command("python3", "notebooks/step1_hashing.py", "-PARTY", strconv.Itoa(pid), "-FOLDER", configFolder).Output()
+		cmd = exec.Command("python3", "notebooks/step1_hashing.py", "-PARTY", strconv.Itoa(pid), "-FOLDER", configFolder)
+		runPython(cmd)
 		log.LLvl1("Done hashing.")
-		if err != nil {
-			log.LLvl1(string(out))
-			panic(err)
-		}
-		log.LLvl1(string(out))
 	}
 	// need to synchronize
 	// wait for all parties to finish
@@ -147,6 +140,20 @@ func InitializeBasicProtocol(pid int, configFolder string, network mpc.ParallelN
 		Cps:    cps,
 		Config: config,
 	}
+}
+
+func runPython(cmd *exec.Cmd) {
+	output, err := cmd.CombinedOutput()
+	// var out bytes.Buffer
+	// var stderr bytes.Buffer
+	// cmd.Stdout = &out
+	// cmd.Stderr = &stderr
+	if err != nil {
+		log.LLvl1(fmt.Sprint(err) + ": " + string(output))
+		panic(err)
+	}
+	log.LLvl1(string(output))
+	// log.LLvl1(out.String() + " - " + stderr.String())
 }
 
 func synchronize(mpcEnv []*mpc.MPC) {
