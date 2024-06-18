@@ -8,6 +8,7 @@ Under review, 2023
 
 This repository contains a set of scripts for generating test cases for testing sf-relate.
 - In the branch `sfkit` (default), we provide the software for use on a single party on a machine in a federated study.
+- The branch `mpc` is similar to `sfkit` except that an MPC-based mode is enabled in the configuration.
 - In the branch `1KG`, we demonstrate the software in detection of related samples in the __publicly available__ [1000 Genomes Project](https://pubmed.ncbi.nlm.nih.gov/36055201/). (See [An Automatic Pipeline For Testing SF-Relate](#an-automatic-pipeline-for-1000-genomes-data))
 - In the branch `UKB`, we provide scripts for generating the test cases based on the __access-limited__ [UK-Biobank](https://www.ukbiobank.ac.uk/). The UK Biobank files need to be stored at the correct paths for these scripts.
 
@@ -19,7 +20,7 @@ READMEs on the corresponding branches detail the different usages.
 
 SF-Relate requires that `go` and `python3` are available in the exec path in shell. Here are the links for installation:
 
-- [Go](https://go.dev/doc/install) (>=1.18.3)
+- [Go](https://go.dev/doc/install) (=1.18.x)
 - Python (>=3.9.2) with [NumPy](https://numpy.org/install/), [joblib](https://joblib.readthedocs.io/en/stable/), [pandas](https://pandas.pydata.org/), [tomlkit](https://pypi.org/project/tomlkit/0.4.6/) and [Pgenlib](https://pypi.org/project/Pgenlib/).
 
 ### Instructions
@@ -170,7 +171,9 @@ The other parameters (`L`) need to be adjusted according to the local statistics
 #### Configuring [step 2: MHE](#step-2-mhe)
 ```toml
 ## ======================== STEP 2 ===============================
-PARA = 1 # Number of parallel processes to use. Set to 20 for the UKB dataset with 100K individual * 90K SNPs on the Google Cloud machine with 128 cores and 576GB memory. Should be set as large as possible to utilize all CPUs and memory. Exact value depends on the machine and dataset sizes. Users can provide reasonable parameters like 5 and retry with a smaller one if it fails due to memory constraints.
+use_mpc = true # if use MPC true, for HE --> false
+PARA = 4 # Number of parallel processes to use. Set to 20 for the UKB dataset with 100K individual * 90K SNPs on the Google Cloud machine with 128 cores and 576GB memory. Should be set as large as possible to utilize all CPUs and memory. Exact value depends on the machine and dataset sizes. Users can provide reasonable parameters like 5 and retry with a smaller one if it fails due to memory constraints.
+mpc_num_threads = 40 # communication channels.should be at least PARA*10
 
 # select output modes
 reveal = 0
@@ -187,8 +190,8 @@ discretized_thresh= [2.0,1.9375,1.875,1.8125,1.75,1.6875,1.625,1.5625,1.5,1.375,
 #### Machine configurations.
 ```toml
 # ================== MACHINE CONFIGURATIONS ==================
-# num threads --- should be set to about 10 * num of cores
-nbr_threads = 1280 
+# num threads --- should be set to about 10 * num of cores for MHE; set to 1 for MPC
+nbr_threads = 1
 
 # Ports for listening to incoming connections from the other parties
 # Party 0 & 1 are hosted on the same machine

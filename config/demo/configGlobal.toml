@@ -22,7 +22,10 @@ s = 0.7 # subsampling rate (i.e. num(outputSNPs)/num(SNPs in .pvar))
 ## ======================== STEP 1 ===============================
 L = 3 # number of repetitive hashing; increase and retry if table saturation is low; if not enough repetition hash keys are sampled in step0 (default number of keys is maxL=6), redo step0 with a larger maxL.
 ## ======================== STEP 2 ===============================
-PARA = 3 # Number of parallel processes to use. Set to 20 for the UKB dataset with 100K individual * 90K SNPs on the Google Cloud machine with 128 cores and 576GB memory. Should be set as large as possible to utilize all CPUs and memory. Exact value depends on the machine and dataset sizes. Users can provide reasonable parameters like 5 and retry with a smaller one if it fails due to memory constraints.
+use_mpc = true # if use MPC true, for HE --> false
+
+PARA = 4 # Number of parallel processes to use. Set to 20 for the UKB dataset with 100K individual * 90K SNPs on the Google Cloud machine with 128 cores and 576GB memory. Should be set as large as possible to utilize all CPUs and memory. Exact value depends on the machine and dataset sizes. Users can provide reasonable parameters like 5 and retry with a smaller one if it fails due to memory constraints.
+mpc_num_threads = 40 # communication channels.should be at least PARA*10
 
 # select output modes
 reveal = 0
@@ -48,7 +51,8 @@ number_of_columns = 0 # if <= 0 --> read from file
 # demo experiment that only processes the first 100 SNPs
 number_of_columns_test = 0 # test only a subset of the columns # if <= 0 --> all columns
 
-batch_length = 8192 # for large-scale experiments, should be 8192 for HE
+# batch_length = 8192 # for large-scale experiments, should be 8192 for HE
+batch_length = 2 # for large-scale experiments, should be 8192 for HE
 block_limit = 100 
 # approx for HE only
 degree = 30
@@ -78,13 +82,11 @@ test_sign_test = 0 # 0 means the main experiment
 # MPC parameters
 div_sqrt_max_len = 100000 # fixed
 # num channels --- maybe need to reduce if num of cores is fewer
-mpc_num_threads = 400 # communication channels. HE: should be at least PARA*((NumMainParties*3)+1), MPC: should be at least PARA
 
 mpc_field_size = 256 # fixed
 mpc_data_bits = 60 # fixed
 mpc_frac_bits = 30 # fixed
 mpc_boolean_shares = true # fixed
-use_mpc = false # if use MPC true, for HE --> false
 # deprecated
 bucket_size	= 1
 # ================== DO NOT MODIFY ABOVE THIS LINE ==================
@@ -93,14 +95,15 @@ bucket_size	= 1
 # Shared keys used in the protocols
 shared_keys_path = "config/demo/keys/"
 
-# num threads --- should be set to about 10 * num of cores
-nbr_threads = 1280 
+# num threads --- should be set to about 10 * num of cores for MHE; set to 1 for MPC
+# nbr_threads = 1280 
+nbr_threads = 1
 
 # Ports for listening to incoming connections from the other parties
 # Party 0 & 1 are hosted on the same machine
 [servers.party0]
 ipaddr = "127.0.0.1" #should be local IP of GCP machine
-ports  = {party1 = "5110", party2 = "7320"}
+ports  = {party1 = "3110", party2 = "7320"}
 
 [servers.party1]
 ipaddr = "127.0.0.1"

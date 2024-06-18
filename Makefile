@@ -13,4 +13,5 @@ Y: compile
 Z: compile
 	bash Z_local.sh 
 party1: X Z
+dev: Y Z
 party2: Y

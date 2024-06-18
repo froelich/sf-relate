@@ -13,7 +13,6 @@ import (
 	"time"
 
 	"github.com/BurntSushi/toml"
-	mpc_core "github.com/hhcho/mpc-core"
 	"github.com/hhcho/sfgwas/crypto"
 	"github.com/hhcho/sfgwas/gwas"
 	"github.com/hhcho/sfgwas/mpc"
@@ -184,11 +183,7 @@ type LocalPhase1Result struct {
 }
 
 type ComparisonResultMPC struct {
-	Result           []mpc_core.RVec
-	Index            mpc_core.RVec
-	OtherIndex       mpc_core.RVec
-	ResultControlled []mpc_core.RVec
-	NbrRepeat        int
+	Result []float64
 }
 
 // ComparisonDataOther contains data to be sent to other party for comparison
@@ -340,14 +335,20 @@ func (pi *ProtocolInfo) BatchProtocols(configFolder string, sending bool, startK
 	batchResult.Result = make([]crypto.CipherVector, numArrays)
 	exec := 0
 	// go through batches of input
+	all_results := make([]float64, 0)
 	for batchStart := pi.startKey; batchStart < pi.endKey; batchStart = batchStart + pi.batchLength {
 		time_start := time.Now()
 
 		pi.simpleData, pi.rowIndex = pi.readbatchOfInput(batchStart, exec, matrixFile, rowIndexVector, colIndexVector, dataset, startKeyGlobal)
 		exec++
 
-		currentResultHE, _ := pi.RelativeSearchProtocol(sending, batchStart, mutex)
+		currentResultHE, currentResultMPC := pi.RelativeSearchProtocol(sending, batchStart, mutex)
 
+		// #TODO: need to decrypt MPC results here
+		if pi.useMPC {
+			all_results = append(all_results, currentResultMPC.Result...)
+			continue
+		}
 		if pi.reveal == 0 || pi.reveal == 1 || pi.reveal == 2 {
 			if pi.basicProt.MpcObj[0].GetPid() > 0 {
 				// should append all result into a single result table for this batch
@@ -374,10 +375,17 @@ func (pi *ProtocolInfo) BatchProtocols(configFolder string, sending bool, startK
 		}
 		log.LLvl1("Time for batch ", batchStart, " is ", time.Since(time_start))
 	}
+	// save result of this block
+	if pi.basicProt.MpcObj[0].GetPid() > 0 {
+		ofile := pi.outFolder + "raw/mpc_" + strconv.Itoa(pi.startKey) + "_party" + strconv.Itoa(pid) + ".txt"
+		log.LLvl1(ofile)
+		save_array_real(all_results, ofile, true)
+	}
 	return batchResult
 }
 
-func (pi *ProtocolInfo) RelativeSearchProtocol(sending bool, batchStart int, mutex *sync.Mutex) (map[int]LocalPhase1Result, map[int]ComparisonResultMPC) {
+func (pi *ProtocolInfo) RelativeSearchProtocol(sending bool, batchStart int, mutex *sync.Mutex) (map[int]LocalPhase1Result, ComparisonResultMPC) {
+	log.LLvl1("Batch starts at ", batchStart, "time = ", time.Now())
 	pid := pi.basicProt.MpcObj[0].GetPid()
 	cps := pi.basicProt.Cps
 
@@ -399,20 +407,26 @@ func (pi *ProtocolInfo) RelativeSearchProtocol(sending bool, batchStart int, mut
 	if pid > 0 { // all nodes that have data
 		log.LLvl1(pid, "prepares her data") // prepare X and the vectors for sum(X^2) and rows
 		timePrepareData := time.Now()
-		if pi.reveal != 0 {
-			Xlocal = prepareLocalData(pid, pi.simpleData, pi.reveal, 1.0/pi.scaledownLocal)
+		if pi.useMPC {
+			Xlocal = prepareLocalData(pid, pi.simpleData, pi.reveal, 1.0*pi.threshValue[0])
 		} else {
-			// for reveal == 0 , pre-scale the het values such that no mult is needed afterwards
-			Xlocal = prepareLocalData(pid, pi.simpleData, pi.reveal, 1.0/pi.scaledownLocal*pi.threshValue[0])
+			if pi.reveal != 0 {
+				Xlocal = prepareLocalData(pid, pi.simpleData, pi.reveal, 1.0/pi.scaledownLocal)
+			} else {
+				// for reveal == 0 , pre-scale the het values such that no mult is needed afterwards
+				Xlocal = prepareLocalData(pid, pi.simpleData, pi.reveal, 1.0/pi.scaledownLocal*pi.threshValue[0])
+			}
 		}
 		Xlocal.Index = pi.rowIndex
 		log.LLvl1(pid, ": prepared data, TIME:", time.Since(timePrepareData))
 	}
+	var compResultsMPC ComparisonResultMPC
 
 	// send encrypted data to requested pids
 	if pid == 0 && pi.useMPC { // for mpc, node 0 needs to help
-		panic("MPC is not implemented")
-	} else if pid > 0 && sending {
+		pi.compareMPC(ComparisonDataLocal{}, "helper", pi.net)
+	}
+	if pid > 0 && sending {
 		// NOTE: this implementation only works for two parties
 		otherPid := 3 - pid
 		log.LLvl1(pid, "prepares data to send to ", otherPid) // key in comparisonMap = node that computes
@@ -439,7 +453,9 @@ func (pi *ProtocolInfo) RelativeSearchProtocol(sending bool, batchStart int, mut
 					pi.blockLimit, pi.numThreads)
 			}(X, nbrofActualRepeat, otherPid)
 		} else {
-			panic("MPC is not implemented")
+			// check if MPC needs to be called here
+			compResultsLocalTmpMPC := pi.compareMPC(Xlocal, "comparee", pi.net) // this Xlocal is Y in comparison with other node
+			compResultsMPC = compResultsLocalTmpMPC
 		}
 
 		log.LLvl1(pid, ": ", "encrypted and sent her data, TIME:", time.Since(timeSendData))
@@ -470,13 +486,15 @@ func (pi *ProtocolInfo) RelativeSearchProtocol(sending bool, batchStart int, mut
 			compResults[otherPid] = compResultsLocalTmp
 			mutexGlobal.Unlock()
 		} else {
-			panic("MPC is not implemented")
+			compResultsLocalTmpMPC := pi.compareMPC(Xlocal, "comparator", pi.net)
+			compResultsMPC = compResultsLocalTmpMPC
+			// TODO after this nothing is implemented for MPC, need to check this step first
 		}
 
 		log.LLvl1(pid, ": time to compute coeff and compare Threshold: TIME: ", time.Since(timeCompare))
 	}
-	if pi.useMPC {
-		panic("MPC is not implemented")
+	if pi.useMPC { // in this case the results are already shared among the parties, so we are done with the protocol
+		return nil, compResultsMPC
 	}
 
 	// mutex.Lock()
@@ -527,9 +545,9 @@ func (pi *ProtocolInfo) RelativeSearchProtocol(sending bool, batchStart int, mut
 	if pid > 0 {
 		// we can use this network to locally decrypt (for debugging)
 		// ownNetworkDec := pi.basicProt.MpcObj.GetNetworks()[pi.bootMap[strconv.Itoa(pid)+dec]]
-		return allResultsToCombine, nil
+		return allResultsToCombine, compResultsMPC
 	}
-	return nil, nil
+	return nil, compResultsMPC
 }
 
 func hetG(mat [][]float64, reveal int, scale float64) ([]float64, []float64, float64) {
@@ -881,6 +899,27 @@ func save_array(sign []complex128, filename string, imagine bool, format bool) {
 		for _, num := range sign {
 			fmt.Fprintf(file, form, real(num))
 		}
+	}
+	file.Close()
+}
+
+func save_array_real(sign []float64, filename string, format bool) {
+	// get the directory of filename
+	dir := filepath.Dir(filename)
+	os.MkdirAll(dir, 0777)
+	file, err := os.Create(filename)
+	if err != nil {
+		panic(err)
+	}
+
+	var form string
+	if format {
+		form = "%.30f\n"
+	} else {
+		form = "%e\n"
+	}
+	for _, num := range sign {
+		fmt.Fprintf(file, form, num)
 	}
 	file.Close()
 }

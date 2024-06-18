@@ -144,16 +144,11 @@ func InitializeBasicProtocol(pid int, configFolder string, network mpc.ParallelN
 
 func runPython(cmd *exec.Cmd) {
 	output, err := cmd.CombinedOutput()
-	// var out bytes.Buffer
-	// var stderr bytes.Buffer
-	// cmd.Stdout = &out
-	// cmd.Stderr = &stderr
 	if err != nil {
 		log.LLvl1(fmt.Sprint(err) + ": " + string(output))
 		panic(err)
 	}
 	log.LLvl1(string(output))
-	// log.LLvl1(out.String() + " - " + stderr.String())
 }
 
 func synchronize(mpcEnv []*mpc.MPC) {

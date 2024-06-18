@@ -107,6 +107,9 @@ func runPhase1withTime(prot *ProtocolInfo, configFolder string, pid int) GlobalP
 }
 
 func runPhase2WithTime(prot *ProtocolInfo, globalResult GlobalPhase1Result, pid int) {
+	if prot.useMPC {
+		return
+	}
 	timeStart := time.Now()
 	reportStats(timeStart, prot, " start phase 2 of MHE : ")
 	if prot.reveal == 0 || prot.reveal == 1 || prot.reveal == 2 {
@@ -139,7 +142,9 @@ func startProtocols(prot *ProtocolInfo, configFolder string, pid int) (globalRes
 	globalWg.Add(paraRun)
 	// verify that numThreads >= PARA * ((NumMainParties * 3) + 1)
 	if prot.basicProt.Config.MpcNumThreads < paraRun*((prot.basicProt.Config.NumMainParties*3)+1) {
-		log.Panic("numThreads must be >= paraRun * ((NumMainParties * 3) + 1)")
+		if !prot.useMPC {
+			log.Panic("numThreads must be >= paraRun * ((NumMainParties * 3) + 1)")
+		}
 	}
 	last_start := prot.startKey // corrected to start_key instead of 0
 	numArrays := []int{1, len(prot.threshValue), len(prot.discretizedThresh), 0}[prot.reveal]
@@ -201,6 +206,9 @@ func startProtocols(prot *ProtocolInfo, configFolder string, pid int) (globalRes
 				sending = !sending
 			}
 			partialGlobalResult := newProt.BatchProtocols(configFolder, sending, prot.startKey, mutex)
+			if newProt.useMPC {
+				return
+			}
 			// assert that the numbers match
 			if numArrays != len(partialGlobalResult.Result) {
 				panic("numArrays != len(partialGlobalResult)")

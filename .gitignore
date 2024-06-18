@@ -9,3 +9,7 @@ __*__
 *backup
 out/
 go.sum
+goParty
+IO_scripts
+*.ipynb
+*.bin
