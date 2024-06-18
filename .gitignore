@@ -9,3 +9,11 @@ __*__
 *backup
 out/
 go.sum
+logs/
+goParty
+signouts/
+demo.tar.gz
+goParty
+IO_scripts
+*.ipynb
+*.bin
