@@ -6,8 +6,8 @@ Software for secure and federated genetic relatives detection, as described in:
 Matthew Man-Hou Hong, David Froelicher, Ricky Magner, Victoria Popic, Bonnie Berger, and Hyunghoon Cho,
 [RECOMB 2024](https://recomb.org/recomb2024/program.html). 
 
-DOI: [10.1101/2024.02.16.580613](https://doi.org/10.1101/2024.02.16.580613)
-The paper is also under review at Genome Research 2024.
+DOI: [10.1101/2024.02.16.580613](https://doi.org/10.1101/2024.02.16.580613).
+This paper is also under review at Genome Research 2024.
 
 This repository contains a set of scripts for generating test cases for testing sf-relate.
 - In the branch `sfkit` (default), we provide the software for use on a single party on a machine in a federated study.
