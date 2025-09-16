@@ -2,6 +2,8 @@ package relativeMatch
 
 import "C"
 import (
+	"bufio"
+	"encoding/binary"
 	"encoding/csv"
 	"fmt"
 	"math"
@@ -78,6 +80,7 @@ func (pi *ProtocolInfo) accumulateByID(allResultsToCombine map[int]crypto.Cipher
 	log.LLvl1("Starting out blocks processing")
 	// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
 	var mutex sync.Mutex
+	relMaskBlocks := make(crypto.CipherVector, OutputBlockCnt)
 	for obid := 0; obid < OutputBlockCnt; obid++ {
 		// spawn worker processes
 		oblock := crypto.CZeros(cps, 1)
@@ -178,6 +181,11 @@ func (pi *ProtocolInfo) accumulateByID(allResultsToCombine map[int]crypto.Cipher
 		ownNetworkBoot := pi.basicProt.MpcObj[pi.bootMap[strconv.Itoa(pid)+boot]].Network
 		ownNetworkBoot.CollectiveBootstrap(cps, oblock[0], pid)
 		oblock = pi.signTestComposed(cps, ownNetworkBoot, nil, pointFiveEncoded, oblock, &mutex, maskForOut, pid, 0, 1)
+
+		oblockInv := crypto.CMultConstRescale(cps, oblock, -1.0, false)
+		oblockInv = crypto.CAddConst(cps, oblockInv, 1.0)
+		relMaskBlocks[obid] = oblockInv[0]
+
 		decrypted := pi.decryptVectorForDebugging(cps, oblock, pid)
 
 		// print out the block result here
@@ -193,7 +201,39 @@ func (pi *ProtocolInfo) accumulateByID(allResultsToCombine map[int]crypto.Cipher
 			panic("unknown mode of revelation")
 		}
 	}
+
+	saveEncryptedMask(pi, "rel_mask", 0, pid, relMaskBlocks)
 	return
+}
+
+func saveEncryptedMask(pi *ProtocolInfo, name string, obid int, pid int, mask crypto.CipherVector) {
+	folder := pi.outFolder + "/encrypted/"
+	if _, err := os.Stat(folder); os.IsNotExist(err) {
+		os.MkdirAll(folder, os.ModePerm)
+	}
+	filename := folder + name + "_" + strconv.Itoa(obid) + "_party" + strconv.Itoa(pid) + ".bin"
+	file, err := os.Create(filename)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer file.Close()
+
+	writer := bufio.NewWriter(file)
+
+	ctBytes, ctSizes, err := mask.MarshalBinary()
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	ncts := uint32(len(ctSizes))
+	binary.Write(writer, binary.LittleEndian, ncts)
+	for _, sz := range ctSizes {
+		binary.Write(writer, binary.LittleEndian, uint64(sz))
+	}
+	binary.Write(writer, binary.LittleEndian, uint64(len(ctBytes)))
+	writer.Write(ctBytes)
+
+	writer.Flush()
 }
 
 func save_decryption(pi *ProtocolInfo, name string, obid int, pid int, oend int, idToCheck []int, obegin int, decrypted []complex128) {
